@@ -191,27 +191,35 @@ BloodHorn does not release pre-built binaries. This is to ensure maximum securit
 
 <table>
   <tr>
-    <td align="center">
-      <a href="https://github.com/PacHashs">
-        <img src="https://avatars.githubusercontent.com/PacHashs" width="120px;" alt="My avatar"/>
-        <br />
-        <sub><b>PacHash</b></sub>
-      </a>
-      <br />
-      Lead Developer 
-    </td>
-    <td align="center">
-      <a href="https://github.com/unpopularopinionn">
-        <img src="https://avatars.githubusercontent.com/unpopularopinionn" width="120px;" alt="Homie avatar"/>
-        <br />
-        <sub><b>UnpopularOpinion</b></sub>
-      </a>
-      <br />
-      Main Team
-    </td>
-  </tr>
-</table>
-
+      <td align="center">
+            <a href="https://github.com/PacHashs">
+                    <img src="https://avatars.githubusercontent.com/PacHashs" width="120px;" alt="My avatar"/>
+                            <br />
+                                    <sub><b>PacHash</b></sub>
+                                          </a>
+                                                <br />
+                                                      Lead Developer 
+                                                          </td>
+                                                              <td align="center">
+                                                                    <a href="https://github.com/unpopularopinionn">
+                                                                            <img src="https://avatars.githubusercontent.com/unpopularopinionn" width="120px;" alt="Homie avatar"/>
+                                                                                    <br />
+                                                                                            <sub><b>UnpopularOpinion</b></sub>
+                                                                                                  </a>
+                                                                                                        <br />
+                                                                                                              Main Team
+                                                                                                                  </td>
+                                                                                                                      <td align="center">
+                                                                                                                            <a href="https://codeberg.org/BillNyeTheSienceGuy">
+                                                                                                                                    <img src="https://codeberg.org/user/avatar/BillNyeTheSienceGuy/128" width="120px;" alt="Bill Nye avatar"/>
+                                                                                                                                            <br />
+                                                                                                                                                    <sub><b>BillNyeTheSienceGuy</b></sub>
+                                                                                                                                                          </a>
+                                                                                                                                                                <br />
+                                                                                                                                                                      Main Team
+                                                                                                                                                                          </td>
+                                                                                                                                                                            </tr>
+                                                                                                                                                                            </table>
 
 See INSTALL.md and USAGE.md for build and usage instructions.
 
