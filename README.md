@@ -1,6 +1,4 @@
 # BloodHorn
-<<<<<<< HEAD
-=======
 
 A bootloader supporting multiple architectures and boot protocols.
 
@@ -9,9 +7,9 @@ A bootloader supporting multiple architectures and boot protocols.
 If you like this project and want to support me, you can donate through [Liberapay](https://liberapay.com/Listedroot/donate).
 
 [![Donate using Liberapay](https://liberapay.com/assets/widgets/donate.svg)](https://liberapay.com/Listedroot/donate)
->>>>>>> 13c918ffb45736cd57911cb3c7e12d547852e402
 
-A bootloader supporting multiple architectures and boot protocols.
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Platform](https://img.shields.io/badge/platform-x86__64%20%7C%20ARM64%20%7C%20RISC--V%20%7C%20LoongArch-blue)](https://codeberg.org/PacHashs/BloodHorn)
 
 ## Features
 - Architectures: x86_64, ARM64, RISC-V, LoongArch

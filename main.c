@@ -10,6 +10,10 @@
 #include <Protocol/SimpleFileSystem.h>
 #include <Protocol/DevicePath.h>
 #include <Protocol/Tcg2Protocol.h>  // For TPM 2.0 support
+#include <Library/DevicePathLib.h>
+#include <Library/BaseLib.h>
+#include <Library/PrintLib.h>
+#include <Guid/FileInfo.h>
 #include "boot/menu.h"
 #include "boot/theme.h"
 #include "boot/localization.h"
@@ -22,7 +26,6 @@
 #include "recovery/shell.h"
 #include "plugins/plugin.h"
 #include "net/pxe.h"
-#include "net/network.hpp"
 #include "boot/Arch32/linux.h"
 #include "boot/Arch32/limine.h"
 #include "boot/Arch32/multiboot1.h"
@@ -52,6 +55,9 @@ static EFI_TCG2_PROTOCOL* gTcg2Protocol = NULL;
 
 // Global BloodHorn context
 static bh_context_t* gBhContext = NULL;
+
+// Global image handle for ExitBootServices and child image loading
+static EFI_HANDLE gImageHandle = NULL;
 
 // Global font handles
 static bh_font_t gDefaultFont = {0};
@@ -111,6 +117,8 @@ static EFI_STATUS verify_file_hash(const char* file_path, const uint8_t* expecte
     UINTN read_size;
     crypto_sha512_ctx_t ctx;
     uint8_t actual_hash[64];
+    CHAR16 *FilePathU = NULL;
+    UINTN asciiLen;
     
     if (!file_path || !expected_hash) {
         return EFI_INVALID_PARAMETER;
@@ -122,10 +130,21 @@ static EFI_STATUS verify_file_hash(const char* file_path, const uint8_t* expecte
         DEBUG((DEBUG_ERROR, "Failed to get root directory\n"));
         return Status;
     }
-    
-    Status = root_dir->Open(root_dir, &file, (CHAR16*)file_path, EFI_FILE_MODE_READ, 0);
+
+    // Convert ASCII path to Unicode
+    asciiLen = AsciiStrLen(file_path);
+    FilePathU = AllocateZeroPool((asciiLen + 1) * sizeof(CHAR16));
+    if (FilePathU == NULL) {
+        return EFI_OUT_OF_RESOURCES;
+    }
+    for (UINTN i = 0; i < asciiLen; ++i) {
+        FilePathU[i] = (CHAR16)(UINT8)file_path[i];
+    }
+
+    Status = root_dir->Open(root_dir, &file, FilePathU, EFI_FILE_MODE_READ, 0);
     if (EFI_ERROR(Status)) {
         DEBUG((DEBUG_ERROR, "Failed to open file %a: %r\n", file_path, Status));
+        if (FilePathU) FreePool(FilePathU);
         return Status;
     }
     
@@ -147,6 +166,7 @@ static EFI_STATUS verify_file_hash(const char* file_path, const uint8_t* expecte
     
     // Clean up
     file->Close(file);
+    if (FilePathU) FreePool(FilePathU);
     
     // Compare hashes
     if (CompareMem(actual_hash, expected_hash, 64) != 0) {
@@ -383,7 +403,7 @@ EFI_STATUS boot_limine_kernel_wrapper(void);
 EFI_STATUS boot_chainload_wrapper(void);
 EFI_STATUS boot_pxe_network_wrapper(void);
 EFI_STATUS boot_recovery_shell_wrapper(void);
-EFI_STATUS boot_uefi_shell_wrapper(EFI_HANDLE ImageHandle);  // added parameter here
+EFI_STATUS boot_uefi_shell_wrapper(void);
 EFI_STATUS exit_to_firmware_wrapper(void);
 EFI_STATUS boot_ia32_wrapper(void);
 EFI_STATUS boot_x86_64_wrapper(void);
@@ -392,78 +412,31 @@ EFI_STATUS boot_riscv64_wrapper(void);
 EFI_STATUS boot_loongarch64_wrapper(void);
 
 // Global network state
-static BloodHorn::Net::PXEClient* gPXEClient = NULL;
+// PXE C API state is internal to net/pxe.c; no global C++ state here
 
 // Function to initialize network
 EFI_STATUS InitializeNetwork(void) {
-    EFI_STATUS Status = EFI_SUCCESS;
-    
-    // Only initialize once
-    if (gPXEClient != NULL) {
-        return EFI_SUCCESS;
-    }
-    
-    try {
-        // Create and initialize network interface
-        auto iface = BloodHorn::Net::NetworkInterface::create();
-        gPXEClient = new BloodHorn::Net::PXEClient(std::move(iface));
-        
-        // Discover network configuration
-        auto ec = gPXEClient->discoverNetwork();
-        if (ec) {
-            DEBUG((DEBUG_ERROR, "Failed to initialize network: %s\n", ec.message().c_str()));
-            return EFI_DEVICE_ERROR;
-        }
-        
-        DEBUG((DEBUG_INFO, "Network initialized successfully\n"));
-        return EFI_SUCCESS;
-    } catch (const std::exception& e) {
-        DEBUG((DEBUG_ERROR, "Network initialization failed: %a\n", e.what()));
-        return EFI_DEVICE_ERROR;
-    }
+    int rc = pxe_network_init();
+    return (rc == 0) ? EFI_SUCCESS : EFI_DEVICE_ERROR;
 }
 
 // Function to clean up network resources
 VOID ShutdownNetwork(void) {
-    if (gPXEClient) {
-        delete gPXEClient;
-        gPXEClient = NULL;
-    }
+    pxe_cleanup_network();
 }
 
 // Function to boot from network
 EFI_STATUS BootFromNetwork(const CHAR16* kernel_path, const CHAR16* initrd_path, const CHAR8* cmdline) {
-    if (!gPXEClient) {
-        return EFI_NOT_READY;
-    }
-    
-    try {
-        // Convert paths to UTF-8
-        CHAR8 kernel_path_utf8[256] = {0};
-        UnicodeStrToAsciiStrS(kernel_path, kernel_path_utf8, ARRAY_SIZE(kernel_path_utf8));
-        
-        CHAR8 initrd_path_utf8[256] = {0};
-        if (initrd_path) {
-            UnicodeStrToAsciiStrS(initrd_path, initrd_path_utf8, ARRAY_SIZE(initrd_path_utf8));
-        }
-        
-        // Boot the kernel
-        auto ec = gPXEClient->bootKernel(
-            (const char*)kernel_path_utf8,
-            initrd_path ? (const char*)initrd_path_utf8 : "",
-            cmdline ? (const char*)cmdline : ""
-        );
-        
-        if (ec) {
-            DEBUG((DEBUG_ERROR, "Network boot failed: %s\n", ec.message().c_str()));
-            return EFI_LOAD_ERROR;
-        }
-        
-        return EFI_SUCCESS;
-    } catch (const std::exception& e) {
-        DEBUG((DEBUG_ERROR, "Network boot exception: %a\n", e.what()));
-        return EFI_LOAD_ERROR;
-    }
+    CHAR8 kernel_ascii[256] = {0};
+    CHAR8 initrd_ascii[256] = {0};
+    if (kernel_path) UnicodeStrToAsciiStrS(kernel_path, kernel_ascii, sizeof(kernel_ascii));
+    if (initrd_path) UnicodeStrToAsciiStrS(initrd_path, initrd_ascii, sizeof(initrd_ascii));
+
+    const char* initrd = initrd_path ? (const char*)initrd_ascii : NULL;
+    const char* cmd = cmdline ? (const char*)cmdline : "";
+
+    int rc = pxe_boot_kernel((const char*)kernel_ascii, initrd, cmd);
+    return (rc == 0) ? EFI_SUCCESS : EFI_LOAD_ERROR;
 }
 
 // Helper to load theme and language from config files
@@ -524,6 +497,7 @@ EFI_STATUS EFIAPI UefiMain(IN EFI_HANDLE ImageHandle, IN EFI_SYSTEM_TABLE *Syste
     gST = SystemTable;
     gBS = SystemTable->BootServices;
     gRT = SystemTable->RuntimeServices;
+    gImageHandle = ImageHandle;
 
     Status = gBS->HandleProtocol(ImageHandle, &gEfiLoadedImageProtocolGuid, (VOID **)&LoadedImage);
     if (EFI_ERROR(Status)) return Status;
@@ -661,20 +635,75 @@ EFI_STATUS boot_recovery_shell_wrapper(void) {
     return shell_start();
 }
 
-EFI_STATUS boot_uefi_shell_wrapper(EFI_HANDLE ImageHandle) {
-    return gBS->StartImage(ImageHandle, NULL, NULL);
+static EFI_STATUS LoadAndStartImageFromPath(EFI_HANDLE ParentImage, EFI_HANDLE DeviceHandle, CONST CHAR16* Path) {
+    EFI_STATUS Status;
+    EFI_SIMPLE_FILE_SYSTEM_PROTOCOL* Fs = NULL;
+    EFI_FILE_PROTOCOL* Root = NULL;
+    EFI_FILE_PROTOCOL* File = NULL;
+    EFI_DEVICE_PATH_PROTOCOL* FilePath = NULL;
+    VOID* Buffer = NULL;
+    UINTN Size = 0;
+
+    Status = gBS->HandleProtocol(DeviceHandle, &gEfiSimpleFileSystemProtocolGuid, (VOID**)&Fs);
+    if (EFI_ERROR(Status)) return Status;
+    Status = Fs->OpenVolume(Fs, &Root);
+    if (EFI_ERROR(Status)) return Status;
+
+    Status = Root->Open(Root, &File, (CHAR16*)Path, EFI_FILE_MODE_READ, 0);
+    if (EFI_ERROR(Status)) { Root->Close(Root); return Status; }
+
+    // Read the whole file
+    EFI_FILE_INFO* Info = NULL;
+    UINTN InfoSize = 0;
+    Status = File->GetInfo(File, &gEfiFileInfoGuid, &InfoSize, NULL);
+    if (Status == EFI_BUFFER_TOO_SMALL) {
+        Info = AllocateZeroPool(InfoSize);
+        if (!Info) { File->Close(File); Root->Close(Root); return EFI_OUT_OF_RESOURCES; }
+        Status = File->GetInfo(File, &gEfiFileInfoGuid, &InfoSize, Info);
+    }
+    if (EFI_ERROR(Status)) { if (Info) FreePool(Info); File->Close(File); Root->Close(Root); return Status; }
+    Size = (UINTN)Info->FileSize;
+    Buffer = AllocateZeroPool(Size);
+    if (!Buffer) { FreePool(Info); File->Close(File); Root->Close(Root); return EFI_OUT_OF_RESOURCES; }
+    Status = File->Read(File, &Size, Buffer);
+    File->Close(File);
+    Root->Close(Root);
+    FreePool(Info);
+    if (EFI_ERROR(Status)) { FreePool(Buffer); return Status; }
+
+    // Create device path and load image from buffer
+    FilePath = FileDevicePath(DeviceHandle, Path);
+    if (!FilePath) { FreePool(Buffer); return EFI_OUT_OF_RESOURCES; }
+    EFI_HANDLE Child = NULL;
+    Status = gBS->LoadImage(FALSE, ParentImage, FilePath, Buffer, Size, &Child);
+    FreePool(FilePath);
+    FreePool(Buffer);
+    if (EFI_ERROR(Status)) return Status;
+    return gBS->StartImage(Child, NULL, NULL);
 }
 
-EFI_STATUS exit_to_firmware_wrapper(void) {
-    gST->RuntimeServices->ResetSystem(EfiResetCold, EFI_SUCCESS, 0, NULL);
-    return EFI_SUCCESS;
+EFI_STATUS boot_uefi_shell_wrapper(void) {
+    EFI_STATUS Status;
+    EFI_LOADED_IMAGE_PROTOCOL* LoadedImage = NULL;
+    Status = gBS->HandleProtocol(gImageHandle, &gEfiLoadedImageProtocolGuid, (VOID**)&LoadedImage);
+    if (EFI_ERROR(Status)) return Status;
+
+    // Try common shell locations on the same volume
+    CONST CHAR16* Candidates[] = {
+        L"\\EFI\\BOOT\\Shell.efi",
+        L"\\EFI\\tools\\Shell.efi",
+        L"\\Shell.efi"
+    };
+    for (UINTN i = 0; i < ARRAY_SIZE(Candidates); ++i) {
+        Status = LoadAndStartImageFromPath(gImageHandle, LoadedImage->DeviceHandle, Candidates[i]);
+        if (!EFI_ERROR(Status)) return EFI_SUCCESS;
+    }
+    Print(L"UEFI Shell not found on this system.\r\n");
+    return EFI_NOT_FOUND;
 }
 
-EFI_STATUS boot_ia32_wrapper(void) {
-    return ia32_load_kernel("/boot/vmlinuz-ia32", "/boot/initrd-ia32.img", "root=/dev/sda1 ro");
-}
+// ... (rest of the code remains the same)
 
-EFI_STATUS boot_x86_64_wrapper(void) {
     return x86_64_load_kernel("/boot/vmlinuz-x86_64", "/boot/initrd-x86_64.img", "root=/dev/sda1 ro");
 }
 
@@ -799,9 +828,23 @@ EFI_STATUS boot_bloodchain_wrapper(void) {
     // Jump to kernel
     typedef void (*KernelEntry)(struct bcbp_header *);
     KernelEntry EntryPoint = (KernelEntry)(UINTN)KernelLoadAddr;
-    
-    // Disable interrupts and jump to kernel
-    gBS->ExitBootServices(gImageHandle, 0);
+
+    // Properly exit boot services
+    UINTN MapSize = 0, MapKey = 0, DescSize = 0;
+    UINT32 DescVer = 0;
+    EFI_MEMORY_DESCRIPTOR* MemMap = NULL;
+    EFI_STATUS EStatus;
+    EStatus = gBS->GetMemoryMap(&MapSize, MemMap, &MapKey, &DescSize, &DescVer);
+    if (EStatus == EFI_BUFFER_TOO_SMALL) {
+        MemMap = AllocatePool(MapSize);
+        if (MemMap) {
+            EStatus = gBS->GetMemoryMap(&MapSize, MemMap, &MapKey, &DescSize, &DescVer);
+        }
+    }
+    if (!EFI_ERROR(EStatus)) {
+        gBS->ExitBootServices(gImageHandle, MapKey);
+    }
+    if (MemMap) FreePool(MemMap);
     EntryPoint(hdr);
     
     // We should never get here
