@@ -1,4 +1,15 @@
 # BloodHorn
+<<<<<<< HEAD
+=======
+
+A bootloader supporting multiple architectures and boot protocols.
+
+## Support Me
+
+If you like this project and want to support me, you can donate through [Liberapay](https://liberapay.com/Listedroot/donate).
+
+[![Donate using Liberapay](https://liberapay.com/assets/widgets/donate.svg)](https://liberapay.com/Listedroot/donate)
+>>>>>>> 13c918ffb45736cd57911cb3c7e12d547852e402
 
 A bootloader supporting multiple architectures and boot protocols.
 
