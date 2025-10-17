@@ -50,8 +50,6 @@ Yes, BloodHorn includes comprehensive Secure Boot support with TPM 2.0 integrati
 ## Contributors
 
 - **[PacHash](https://github.com/PacHashs)** - Lead Developer
-- **[UnpopularOpinion](https://github.com/unpopularopinionn)** - Main Team
-
 - **[BillNyeTheScienceGuy](https://codeberg.org/BillNyeTheSienceGuy)** - Main Team
 
 ---
