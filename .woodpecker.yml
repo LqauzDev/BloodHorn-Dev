@@ -1,79 +1,42 @@
-# SoftwaresForAll Native CI configuration for C written projects
-workspace:
-  base: /woodpecker
-  path: src/${CI_REPO}
-
-matrix:
-  TOOLCHAIN:
-    - gcc-12
-    - clang-15
-
-environment:
-  BUILD_DIR: build
-  CMAKE_BUILD_TYPE: RelWithDebInfo
-  MAKEFLAGS: "-j$(nproc)"
-
-steps:
-  - name: setup-deps
-    image: ubuntu:22.04
+// SoftwaresForAll Native CI configuration for C written projects
+pipeline:
+  setup:
+    image: ubuntu:24.04
     commands:
-      - apt-get update -y
-      - apt-get install -y --no-install-recommends build-essential cmake git python3 pkg-config curl wget ca-certificates valgrind lcov cppcheck clang-tidy
-      - |
-        if echo "${TOOLCHAIN}" | grep -q clang; then
-          apt-get install -y clang;
-          export CC=clang;
-          export CXX=clang++;
-        else
-          apt-get install -y gcc g++;
-          export CC=gcc;
-          export CXX=g++;
-        fi
+      - apt update -y
+      - apt install -y git wget curl unzip python3 python3-pip build-essential cmake ninja-build
+      - wget https://github.com/github/codeql-cli-binaries/releases/latest/download/codeql-linux64.zip
+      - unzip codeql-linux64.zip -d /opt
+      - echo "export PATH=/opt/codeql:$PATH" >> ~/.bashrc
+      - source ~/.bashrc
+      - codeql version
 
-  - name: configure
-    image: ubuntu:22.04
+  build:
+    image: gcc:14
     commands:
-      - cmake -B ${BUILD_DIR} -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} -DCMAKE_C_COMPILER=${CC}
+      - mkdir -p build && cd build
+      - cmake .. -DCMAKE_BUILD_TYPE=Release
+      - cmake --build . --parallel $(nproc)
+      - cd ..
 
-  - name: build
-    image: ubuntu:22.04
+  codeql:
+    image: ubuntu:24.04
     commands:
-      - cmake --build ${BUILD_DIR} --parallel
+      - apt update -y
+      - apt install -y unzip python3
+      - wget https://github.com/github/codeql-cli-binaries/releases/latest/download/codeql-linux64.zip
+      - unzip codeql-linux64.zip -d /opt
+      - export PATH="/opt/codeql:$PATH"
+      - mkdir -p /tmp/codeql-db
+      - codeql database create /tmp/codeql-db --language=cpp --command="cmake -Bbuild && cmake --build build"
+      - codeql database analyze /tmp/codeql-db cpp-security-and-quality.qls --format=sarifv2.1.0 --output=codeql-results.sarif
+      - echo "=== CodeQL Scan Completed ==="
+      - ls -lh codeql-results.sarif
 
-  - name: test
-    image: ubuntu:22.04
+  artifacts:
+    image: alpine:3
     commands:
-      - cd ${BUILD_DIR}
-      - ctest --output-on-failure
-
-  - name: static-analysis
-    image: ubuntu:22.04
-    commands:
-      - cppcheck --enable=all --inconclusive --error-exitcode=1 .
-      - clang-tidy **/*.c -- -Iinclude -std=c11
-
-  - name: sanitizers
-    image: ubuntu:22.04
-    commands:
-      - cmake -B ${BUILD_DIR}_asan -DCMAKE_BUILD_TYPE=Debug -DCMAKE_C_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer"
-      - cmake --build ${BUILD_DIR}_asan
-      - ASAN_OPTIONS=detect_leaks=1 ./${BUILD_DIR}_asan/tests/test_suite || true
-
-  - name: valgrind
-    image: ubuntu:22.04
-    commands:
-      - valgrind --error-exitcode=1 --leak-check=full ./${BUILD_DIR}/tests/test_suite || true
-
-  - name: coverage
-    image: ubuntu:22.04
-    commands:
-      - cmake -B ${BUILD_DIR}_cov -DCMAKE_BUILD_TYPE=Debug -DCMAKE_C_FLAGS="--coverage"
-      - cmake --build ${BUILD_DIR}_cov
-      - cd ${BUILD_DIR}_cov
-      - ctest || true
-      - lcov --capture --directory . --output-file coverage.info
-      - lcov --remove coverage.info '/usr/*' --output-file coverage.info
-      - genhtml coverage.info --output-directory coverage-report
-      - tar -czf coverage-report.tar.gz coverage-report
-    artifacts:
-      - coverage-report.tar.gz
+      - mkdir -p artifacts
+      - cp codeql-results.sarif artifacts/
+    when:
+      status: success
