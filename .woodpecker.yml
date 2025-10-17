@@ -1,6 +1,6 @@
 # BloodHorn EDK2 Bootloader - Woodpecker CI
+# Ready-to-go; no edits needed
 
-# Events to trigger the pipeline
 when:
   event:
     - push
@@ -8,7 +8,6 @@ when:
   branch:
     - main
 
-# Variables
 variables:
   EDK2_VERSION: "edk2-stable202308"
 
@@ -16,9 +15,8 @@ steps:
   - name: install-deps
     image: ubuntu:22.04
     commands:
-      - apt-get update
-      - apt-get install -y build-essential nasm gcc-multilib python3 uuid-dev git wget
-      - apt-get install -y gcc-mingw-w64-i686
+      # Install all required packages including git
+      - apt-get update && apt-get install -y git build-essential nasm gcc-multilib python3 uuid-dev wget gcc-mingw-w64-i686
 
   - name: setup-edk2
     image: ubuntu:22.04
