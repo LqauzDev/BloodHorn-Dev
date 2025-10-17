@@ -6,6 +6,8 @@ A bootloader supporting multiple architectures and boot protocols.
 
 If you like this project and want to support me, you can donate through [Liberapay](https://liberapay.com/Listedroot/donate).
 
+[![Build Status](https://ci.codeberg.org/api/badges/PacHashs/BloodHorn/status.svg)](https://ci.codeberg.org/PacHashs/BloodHorn)
+
 [![Donate using Liberapay](https://liberapay.com/assets/widgets/donate.svg)](https://liberapay.com/Listedroot/donate)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
