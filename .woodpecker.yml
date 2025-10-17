@@ -1,5 +1,5 @@
 # SoftwaresForAll Native CI configuration for C written projects
-pipeline:
+steps:
   setup:
     image: ubuntu:24.04
     commands:
