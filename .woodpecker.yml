@@ -1,6 +1,6 @@
-\# BloodHorn EDK2 Bootloader - Woodpecker CI
+# BloodHorn EDK2 Bootloader - Woodpecker CI
 
-# Root-level triggers
+# Events to trigger the pipeline
 when:
   event:
     - push
@@ -13,16 +13,14 @@ variables:
   EDK2_VERSION: "edk2-stable202308"
 
 steps:
-  # Install dependencies
-  install-deps:
+  - name: install-deps
     image: ubuntu:22.04
     commands:
       - apt-get update
       - apt-get install -y build-essential nasm gcc-multilib python3 uuid-dev git wget
       - apt-get install -y gcc-mingw-w64-i686
 
-  # Setup EDK2
-  setup-edk2:
+  - name: setup-edk2
     image: ubuntu:22.04
     depends_on: [install-deps]
     commands:
@@ -35,8 +33,7 @@ steps:
       - cp -r ../BloodHorn ./BloodHorn/
       - echo "EDK2 setup complete"
 
-  # Build X64
-  build-x64:
+  - name: build-x64
     image: ubuntu:22.04
     depends_on: [setup-edk2]
     commands:
@@ -47,8 +44,7 @@ steps:
       - echo "Build X64 completed"
       - ls -la Build/BloodHorn/RELEASE_GCC5/X64/
 
-  # Build ARM64 (optional)
-  build-arm64:
+  - name: build-arm64
     image: ubuntu:22.04
     depends_on: [setup-edk2]
     commands:
@@ -58,8 +54,7 @@ steps:
       - build -p BloodHorn.dsc -a AARCH64 -b RELEASE -t GCC5 || echo "ARM64 build skipped"
       - ls -la Build/BloodHorn/RELEASE_GCC5/AARCH64/ || echo "No ARM64 artifacts"
 
-  # Validate build
-  validate:
+  - name: validate
     image: ubuntu:22.04
     depends_on: [build-x64, build-arm64]
     commands:
