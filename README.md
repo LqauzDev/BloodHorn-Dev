@@ -82,4 +82,4 @@ Yes, BloodHorn features comprehensive Coreboot firmware integration with automat
 *BloodHorn was inspired by modern bootloaders, but all code is original and written from scratch for educational purposes and for use in future operating systems.*
 
 ## License
-MIT
+MIT.
