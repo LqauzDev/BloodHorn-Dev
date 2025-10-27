@@ -1,6 +1,8 @@
 # BloodHorn
 
-Modern, developer-friendly UEFI bootloader with Coreboot + UEFI hybrid support.
+<p align="center">
+  <img src="Zeak.png" alt="BloodHorn Logo" width="500"/>
+</p>
 
 ## Support Me
 
@@ -66,7 +68,7 @@ cmdline = root=/dev/sda1 ro quiet
 
 ## Why BloodHorn vs. Limine or GRUB?
 
-BloodHorn is not a drop-in replacement for GRUB or Limine. It targets a modern, clean, and extensible codebase with Coreboot + UEFI hybrid support and a focus on developer experience.
+BloodHorn is not a drop-in replacement for GRUB or Limine. It targets a modern, clean, and extensible codebase with Coreboot + UEFI hybrid support and a focus on developer experience. adding to that that bloodhorn is still underdevelopment. issues and bugs may rise more often then more mature bootloaders like limine or grub.
 
 When you might prefer BloodHorn:
 
