@@ -10,6 +10,32 @@
 
 BloodHorn is a modern, high-performance bootloader built on the EDK2 framework with Coreboot integration. Designed for speed, security, and reliability, it provides a robust foundation for system initialization across multiple architectures.
 
+## Important Safety Notice
+
+BloodHorn is a low-level system component that interacts directly with hardware. Incorrect use may result in system damage, data loss, or security vulnerabilities.
+
+### Intended Audience
+- System firmware developers
+- Security researchers
+- Embedded systems engineers
+- Advanced users with recovery capabilities
+
+### Technical Requirements
+- UEFI/BIOS and system architecture knowledge
+- Low-level programming experience (C, assembly) or at least knowing fundumentals of dealing with low level components
+- Secure boot and firmware security understanding
+- Hardware recovery tools and procedures
+
+### System Impact
+BloodHorn operates at the hardware level with the following characteristics:
+- Multi-architecture support (x86_64, ARM, RISC-V, LoongArch)
+- EDK2 Framework Integration
+- Coreboot Payload Support
+- Security features including TPM and secure boot
+- Modular plugin architecture
+
+Note: The BloodHorn team is not responsible for any hardware damage or data loss resulting from the use of this software.
+
 ## Project History
 
 ### Origins (2016)

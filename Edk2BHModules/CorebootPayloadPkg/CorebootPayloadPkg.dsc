@@ -21,6 +21,7 @@
 [LibraryClasses]
   # Coreboot Payload Library
   CorebootPayloadLib|CorebootPayloadPkg/Library/CorebootPayloadLib/CorebootPayloadLib.inf
+  CorebootCompatLib|CorebootPayloadPkg/Library/CorebootCompatLib/CorebootCompatLib.inf
   
   # Standard Libraries
   BaseLib|MdePkg/Library/BaseLib/BaseLib.inf
@@ -29,8 +30,9 @@
   PcdLib|MdePkg/Library/BasePcdLibNull/BasePcdLibNull.inf
 
 [Components]
-  # Coreboot Payload Library
+  # Coreboot Payload Libraries
   CorebootPayloadPkg/Library/CorebootPayloadLib/CorebootPayloadLib.inf
+  CorebootPayloadPkg/Library/CorebootCompatLib/CorebootCompatLib.inf
 
 [BuildOptions]
   *_*_*_CC_FLAGS = -D DISABLE_NEW_DEPRECATED_INTERFACES
