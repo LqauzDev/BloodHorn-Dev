@@ -2,19 +2,19 @@
 
 <p align="center">
   <img src="Z.png" alt="BloodHorn Logo" width="500"/>
+  <br>
+  <em>"The bootloader that boots so fast, it's already judging your life choices"</em>
 </p>
 
-<div align="center">
-  <img src="winerr.png" alt=":(" width="22" style="vertical-align:middle; margin-right:6px;"/>
-  <strong>Temporary Discontinued Notice</strong>
-</div>
+> **Temporary Hiatus Notice**  
+> Currently on a digital sabbatical until 2026.  
+> Think of it as a really long coffee break.  
+> The code isn't going anywhere - it's just taking a nap.  
+> PRs are in read-only mode (like your grandma's Facebook account).
 
-<p align="center">
-  This project is <strong>temporarily discontinued</strong> until <strong>January 1, 2026</strong> due to mental health reasons affecting the main maintainer.
-  During this period, <strong>no new commits</strong> will be pushed, <strong>pull requests will not be reviewed or merged</strong>,
-  and <strong>issues will not be triaged</strong>.
-  Thank you for your understanding and patience.
-</p>
+## BloodHorn: The Bootloader That Doesn't Ask Stupid Questions
+
+BloodHorn is the Chuck Norris of bootloaders - it doesn't boot your system, it allows your system to boot. While other bootloaders are still asking if you want to start in safe mode, BloodHorn has already booted your OS, made coffee, and is now judging your choice of Linux distribution.
 
 ## Support Me
 
@@ -50,13 +50,16 @@ cmdline = root=/dev/sda1 ro quiet
    - Localization file: `\\locales\\en.ini` (key=value strings)
    - PSF1 font: `/fonts/ter-16n.psf` (referenced by `boot.font_path`)
 5. Boot BloodHorn from your firmware menu. Press any key to open the menu during the countdown.
-## Features
-- **Architectures**: x86_64, ARM64, RISC-V, LoongArch
-- **Protocols**: Linux, Multiboot 1/2, Limine, Chainload, PXE, BloodChain
-- **Security**: Secure Boot, TPM 2.0, file verification
-- **Config**: INI/JSON/UEFI vars, layered with sane defaults
-- **UI**: Text/graphical, localization via `\\locales\\<lang>.ini`, PSF1 font loading
-- **Firmware**: Coreboot + UEFI hybrid with auto-detection
+## Features That Make GRUB Look Like a Dial-Up Connection
+
+- **Architectures**: x86_64, ARM64, RISC-V, LoongArch - Like a UN meeting, but for your computer's soul
+- **Protocols**: Linux, Multiboot 1/2, Limine, Chainload, PXE, BloodChain - More protocols than your ex has excuses
+- **Security**: Secure Boot, TPM 2.0, file verification - We've got more layers than an onion (and might make you cry less)
+- **Config**: INI/JSON/UEFI vars - Because one way to do things is boring, and three is a party
+- **UI**: Text/graphical with localization - Now with 100% fewer "grub>" prompts that make you question your life choices
+- **Firmware**: Coreboot + UEFI hybrid - Like peanut butter and chocolate, but for your firmware
+- **Recovery Mode**: For when you thought "rm -rf /" was a good idea at 3 AM
+- **Boot Speed**: Faster than you can say "I'll just check Reddit while I wait"
 
 ## Building
 - Install EDK2 and required toolchain
@@ -78,26 +81,34 @@ cmdline = root=/dev/sda1 ro quiet
 
 **Coreboot Integration:** For detailed information about BloodHorn's Coreboot firmware integration, see `docs/COREBOOT_INTEGRATION.md`.
 
-## Why BloodHorn vs. Limine or GRUB?
+## Why BloodHorn? (Asking for a Friend)
 
-BloodHorn is not a drop-in replacement for GRUB or Limine. It targets a modern, clean, and extensible codebase with Coreboot + UEFI hybrid support and a focus on developer experience. adding to that that bloodhorn is still underdevelopment. issues and bugs may rise more often then more mature bootloaders like limine or grub.
+### You'll Love BloodHorn If You've Ever:
+- Wanted to high-five your bootloader (metaphorically, please don't touch the screen)
+- Thought "I wish this boot process had more personality"
+- Wasted hours configuring GRUB only to get a blinking cursor
+- Wanted to feel like a hacker without actually having to hack anything
 
-When you might prefer BloodHorn:
+### Choose BloodHorn When:
+- **You value your time** - Boots faster than you can say "I'll just check my phone"
+- **You like options** - More configuration choices than a hipster coffee shop
+- **You make mistakes** - Recovery mode that doesn't judge (much)
+- **You're not a morning person** - Because neither are we
 
-- **Hybrid Coreboot + UEFI**: Needs direct Coreboot init while keeping UEFI services.
-- **Minimal, modern codebase**: Easier to read/extend than legacy loaders.
-- **Custom protocols and experimentation**: Native BloodChain protocol and Lua/plugins.
-- **Config flexibility**: INI/JSON/UEFI-variables with simple merging and sane defaults.
-- **Built-in localization + font selection**: `\locales\<lang>.ini` and PSF font loading via config.
+### Stick With GRUB If You:
+- Enjoy typing commands that look like they're in Klingon
+- Think booting should be a social activity (with all that waiting around)
+- Believe "minimalist" means "I like staring at a command prompt"
+- Have a poster of Linus Torvalds on your wall (we see you)
 
-When you might prefer GRUB or Limine:
+### Real Developers (and Their Computers) Love BloodHorn
+- **For the rebels** who think "standards are just suggestions"
+- **For the optimists** who think "it worked once, ship it!"
+- **For the realists** who know they'll be debugging this at 2 AM
+- **For the dreamers** who believe one day their code will be as cool as BloodHorn
 
-- **Broad distro integration**: GRUB has mature tooling and OS installer support.
-- **Complex filesystems and modules**: GRUB's module ecosystem may be required.
-- **Existing ecosystem configs**: If you already rely on Limine or GRUB configs/scripts.
-- **Special boot flows**: GRUB chainloading/menu scripting already meets your needs.
-
-Summary: choose BloodHorn for a modern, hackable bootloader with Coreboot hybrid support and straightforward configuration; choose GRUB/Limine for large ecosystem integration and long-established workflows.
+> *"I used to have a life. Then I found BloodHorn. Now I spend all my time booting things just for fun."*  
+> — Probably someone, somewhere, hopefully
 
 ## FAQ
 
