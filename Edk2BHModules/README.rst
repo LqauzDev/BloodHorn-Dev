@@ -14,9 +14,7 @@ Modifications from Upstream EDK2
 
 Core Changes
 ~~~~~~~~~~~~
-- **Code Optimization**: Critical paths have been optimized for faster boot times
-- **Memory Management**: Enhanced memory allocation and management
-- **Security Enhancements**: Additional security measures and hardening
+- **Code Optimization**: Critical paths have been optimized and packages/modules we're stripped for more compatibility  for faster boot times
 - **Coreboot Integration**: Improved support for Coreboot as a payload
 - **BloodHorn-Specific Drivers**: Custom drivers for BloodHorn's hardware support
 
