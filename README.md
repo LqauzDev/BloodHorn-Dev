@@ -6,6 +6,8 @@
   <em>Fast, secure, and reliable system bootstrapping</em>
 </p>
 
+![Code Quality](./quality_badge.svg)
+
 ## About BloodHorn
 
 BloodHorn is a modern, high-performance bootloader built on the EDK2 framework with Coreboot integration. Designed for speed, security, and reliability, it provides a robust foundation for system initialization across multiple architectures.
