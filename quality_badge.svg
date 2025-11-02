@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="156" height="30">
+    <rect width="120" height="30" fill="#555"/>
+    <rect x="120" width="36" height="30" fill="#00c853"/>
+    <text x="10" y="20" fill="#fff" font-family="monospace" font-size="14">Code Quality</text>
+    <text x="130" y="20" fill="#fff" font-family="monospace" font-size="14">A+</text>
+    </svg>
