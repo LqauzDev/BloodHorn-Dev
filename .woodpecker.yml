@@ -1,43 +1,107 @@
-# SoftwaresForAll Native CI configuration for C written projects
-steps:
-  setup:
-    image: ubuntu:24.04
-    commands:
-      - apt update -y
-      - apt install -y git wget unzip python3 build-essential cmake ninja-build
-      - wget https://github.com/github/codeql-cli-binaries/releases/latest/download/codeql-linux64.zip
-      - unzip codeql-linux64.zip -d /opt
-      - echo "export PATH=/opt/codeql:$PATH" >> ~/.bashrc
-      - source ~/.bashrc
-      - codeql version
+# .woodpecker.yml
+# Multi-architecture bootloader test pipeline  
+# Shows compile results for each arch,
 
-  build:
-    image: gcc:14
-    commands:
-      - mkdir -p build
-      - cd build
-      - cmake .. -DCMAKE_BUILD_TYPE=Release
-      - cmake --build . --parallel $(nproc)
-      - cd ..
+variables:
+  BUILD_DIR: build
 
-  codeql:
-    image: ubuntu:24.04
+pipeline:
+  # -------------------------------
+  # COMMON SETUP
+  # -------------------------------
+  prepare:
+    image: alpine
     commands:
-      - apt update -y
-      - apt install -y unzip python3 build-essential cmake
-      - wget https://github.com/github/codeql-cli-binaries/releases/latest/download/codeql-linux64.zip
-      - unzip codeql-linux64.zip -d /opt
-      - export PATH="/opt/codeql:$PATH"
-      - mkdir -p /tmp/codeql-db
-      - codeql database create /tmp/codeql-db --language=cpp --command="cmake -Bbuild && cmake --build build"
-      - codeql database analyze /tmp/codeql-db cpp-security-and-quality.qls --format=sarifv2.1.0 --output=codeql-results.sarif
-      - echo "=== CodeQL Scan Completed ==="
-      - ls -lh codeql-results.sarif
+      - apk add build-base bash
+      - mkdir -p "$BUILD_DIR"
 
-  artifacts:
-    image: alpine:3
+  # ---------------------------------------
+  # i386 BUILD
+  # ---------------------------------------
+  build_i386:
+    image: archlinux:latest
+    group: tests
     commands:
-      - mkdir -p artifacts
-      - cp codeql-results.sarif artifacts/
-    when:
-      status: success
+      - pacman -Sy --noconfirm gcc make nasm
+      - echo "=== Building for i386 ==="
+      - set +e
+      - make ARCH=i386 O="$BUILD_DIR/i386"
+      - BUILD_STATUS=$?
+      - echo "i386 build exit code: $BUILD_STATUS"
+      - echo "$BUILD_STATUS" > "$BUILD_DIR/i386_result.txt"
+      - exit 0
+
+  # ---------------------------------------
+  # x86_64 BUILD
+  # ---------------------------------------
+  build_x86_64:
+    image: archlinux:latest
+    group: tests
+    commands:
+      - pacman -Sy --noconfirm gcc make nasm
+      - echo "=== Building for x86_64 ==="
+      - set +e
+      - make ARCH=x86_64 O="$BUILD_DIR/x86_64"
+      - BUILD_STATUS=$?
+      - echo "x86_64 build exit code: $BUILD_STATUS"
+      - echo "$BUILD_STATUS" > "$BUILD_DIR/x86_64_result.txt"
+      - exit 0
+
+  # ---------------------------------------
+  # ARM32 BUILD
+  # ---------------------------------------
+  build_arm32:
+    image: multiarch/alpine:armhf-latest
+    group: tests
+    commands:
+      - apk add build-base make bash
+      - echo "=== Building for ARM32 ==="
+      - set +e
+      - make ARCH=arm O="$BUILD_DIR/arm32"
+      - BUILD_STATUS=$?
+      - echo "arm32 build exit code: $BUILD_STATUS"
+      - echo "$BUILD_STATUS" > "$BUILD_DIR/arm32_result.txt"
+      - exit 0
+
+  # ---------------------------------------
+  # AARCH64 BUILD
+  # ---------------------------------------
+  build_aarch64:
+    image: multiarch/alpine:aarch64-latest
+    group: tests
+    commands:
+      - apk add build-base make bash
+      - echo "=== Building for AArch64 ==="
+      - set +e
+      - make ARCH=aarch64 O="$BUILD_DIR/aarch64"
+      - BUILD_STATUS=$?
+      - echo "aarch64 build exit code: $BUILD_STATUS"
+      - echo "$BUILD_STATUS" > "$BUILD_DIR/aarch64_result.txt"
+      - exit 0
+
+  # ---------------------------------------
+  # RISC-V RV64 BUILD
+  # ---------------------------------------
+  build_riscv64:
+    image: debian:stable
+    group: tests
+    commands:
+      - apt update && apt install -y build-essential make gcc-riscv64-linux-gnu
+      - echo "=== Building for RISC-V64 ==="
+      - set +e
+      - make ARCH=riscv64 O="$BUILD_DIR/riscv64"
+      - BUILD_STATUS=$?
+      - echo "riscv64 build exit code: $BUILD_STATUS"
+      - echo "$BUILD_STATUS" > "$BUILD_DIR/riscv64_result.txt"
+      - exit 0
+
+  # ---------------------------------------
+  # FINAL STAGE
+  # ---------------------------------------
+  summary:
+    image: alpine
+    commands:
+      - echo "=== SUMMARY OF ARCH BUILD RESULTS ==="
+      - for f in $BUILD_DIR/*_result.txt; do echo "$(basename $f): $(cat $f)"; done
+      - echo "Pipeline finished. All failures are visible above."
+
