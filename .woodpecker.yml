@@ -1,9 +1,9 @@
 steps:
 
   build_i386:
-    image: i386/alpine:latest
+    image: alpine:latest
     commands:
-      - apk add build-base make bash
+      - apk add build-base make bash nasm
       - |
         echo "=== Building for i386 ==="
         set +e
@@ -25,7 +25,7 @@ steps:
         exit 0
 
   build_arm32:
-    image: arm32v7/alpine:latest
+    image: alpine:latest
     commands:
       - apk add build-base make bash
       - |
@@ -37,7 +37,7 @@ steps:
         exit 0
 
   build_aarch64:
-    image: arm64v8/alpine:latest
+    image: alpine:latest
     commands:
       - apk add build-base make bash
       - |
@@ -49,7 +49,7 @@ steps:
         exit 0
 
   build_riscv64:
-    image: riscv64/debian:latest
+    image: debian:stable
     commands:
       - apt update && apt install -y build-essential make gcc-riscv64-linux-gnu
       - |
