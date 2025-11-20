@@ -1,107 +1,75 @@
 # .woodpecker.yml
-# Multi-architecture bootloader test pipeline  
-# Shows compile results for each arch,
+# Multi-architecture bootloader CI
+# Runs real builds, logs failures, but always passes.
 
-variables:
-  BUILD_DIR: build
+steps:
 
-pipeline:
-  # -------------------------------
-  # COMMON SETUP
-  # -------------------------------
-  prepare:
-    image: alpine
-    commands:
-      - apk add build-base bash
-      - mkdir -p "$BUILD_DIR"
-
-  # ---------------------------------------
-  # i386 BUILD
-  # ---------------------------------------
+  # ---------------------------
+  # i386
+  # ---------------------------
   build_i386:
     image: archlinux:latest
-    group: tests
     commands:
       - pacman -Sy --noconfirm gcc make nasm
       - echo "=== Building for i386 ==="
       - set +e
-      - make ARCH=i386 O="$BUILD_DIR/i386"
-      - BUILD_STATUS=$?
-      - echo "i386 build exit code: $BUILD_STATUS"
-      - echo "$BUILD_STATUS" > "$BUILD_DIR/i386_result.txt"
+      - make ARCH=i386
+      - STATUS=$?
+      - echo "i386 exit code: $STATUS"
       - exit 0
 
-  # ---------------------------------------
-  # x86_64 BUILD
-  # ---------------------------------------
+  # ---------------------------
+  # x86_64
+  # ---------------------------
   build_x86_64:
     image: archlinux:latest
-    group: tests
     commands:
       - pacman -Sy --noconfirm gcc make nasm
       - echo "=== Building for x86_64 ==="
       - set +e
-      - make ARCH=x86_64 O="$BUILD_DIR/x86_64"
-      - BUILD_STATUS=$?
-      - echo "x86_64 build exit code: $BUILD_STATUS"
-      - echo "$BUILD_STATUS" > "$BUILD_DIR/x86_64_result.txt"
+      - make ARCH=x86_64
+      - STATUS=$?
+      - echo "x86_64 exit code: $STATUS"
       - exit 0
 
-  # ---------------------------------------
-  # ARM32 BUILD
-  # ---------------------------------------
+  # ---------------------------
+  # ARM 32-bit (armhf)
+  # ---------------------------
   build_arm32:
     image: multiarch/alpine:armhf-latest
-    group: tests
     commands:
       - apk add build-base make bash
       - echo "=== Building for ARM32 ==="
       - set +e
-      - make ARCH=arm O="$BUILD_DIR/arm32"
-      - BUILD_STATUS=$?
-      - echo "arm32 build exit code: $BUILD_STATUS"
-      - echo "$BUILD_STATUS" > "$BUILD_DIR/arm32_result.txt"
+      - make ARCH=arm
+      - STATUS=$?
+      - echo "arm32 exit code: $STATUS"
       - exit 0
 
-  # ---------------------------------------
-  # AARCH64 BUILD
-  # ---------------------------------------
+  # ---------------------------
+  # ARM 64-bit (AArch64)
+  # ---------------------------
   build_aarch64:
     image: multiarch/alpine:aarch64-latest
-    group: tests
     commands:
       - apk add build-base make bash
       - echo "=== Building for AArch64 ==="
       - set +e
-      - make ARCH=aarch64 O="$BUILD_DIR/aarch64"
-      - BUILD_STATUS=$?
-      - echo "aarch64 build exit code: $BUILD_STATUS"
-      - echo "$BUILD_STATUS" > "$BUILD_DIR/aarch64_result.txt"
+      - make ARCH=aarch64
+      - STATUS=$?
+      - echo "aarch64 exit code: $STATUS"
       - exit 0
 
-  # ---------------------------------------
-  # RISC-V RV64 BUILD
-  # ---------------------------------------
+  # ---------------------------
+  # RISC-V 64
+  # ---------------------------
   build_riscv64:
     image: debian:stable
-    group: tests
     commands:
       - apt update && apt install -y build-essential make gcc-riscv64-linux-gnu
       - echo "=== Building for RISC-V64 ==="
       - set +e
-      - make ARCH=riscv64 O="$BUILD_DIR/riscv64"
-      - BUILD_STATUS=$?
-      - echo "riscv64 build exit code: $BUILD_STATUS"
-      - echo "$BUILD_STATUS" > "$BUILD_DIR/riscv64_result.txt"
+      - make ARCH=riscv64
+      - STATUS=$?
+      - echo "riscv64 exit code: $STATUS"
       - exit 0
-
-  # ---------------------------------------
-  # FINAL STAGE
-  # ---------------------------------------
-  summary:
-    image: alpine
-    commands:
-      - echo "=== SUMMARY OF ARCH BUILD RESULTS ==="
-      - for f in $BUILD_DIR/*_result.txt; do echo "$(basename $f): $(cat $f)"; done
-      - echo "Pipeline finished. All failures are visible above."
-
