@@ -162,6 +162,8 @@ STATIC BOOLEAN str_ieq(const CHAR8* a, const CHAR8* b) {
         if (ca != cb) return FALSE;
         a++; b++;
     }
+    return *a == 0 && *b == 0;
+}
 
 // Load a file from the filesystem into memory (no hash verification)
 STATIC
@@ -210,8 +212,6 @@ LoadFileRaw (
     *Buffer = buffer;
     *Size = size;
     return EFI_SUCCESS;
-}
-    return *a == 0 && *b == 0;
 }
 
 STATIC BOOLEAN parse_bool_ascii(const CHAR8* v, BOOLEAN defv) {
@@ -663,7 +663,12 @@ static void bh_uefi_shutdown(void) {
 
 // Helper function for debug break
 static void bh_uefi_debug_break(void) {
+#if defined(__i386__) || defined(__x86_64__)
     __asm__ volatile("int $3");
+#else
+    /* On non-x86 platforms, there's no INT3; use a portable hang to aid debugging */
+    for (;;) { __asm__ volatile ("nop"); }
+#endif
 }
 
 // Boot wrapper implementations
@@ -847,22 +852,48 @@ EFI_STATUS EFIAPI BootBloodchainWrapper(VOID) {
     typedef void (*KernelEntry)(struct bcbp_header*);
     KernelEntry EntryPoint = (KernelEntry)(UINTN)KernelLoadAddr;
 
-    // Properly exit boot services
+    // Properly exit boot services (robustly handle map changes/races)
     UINTN MapSize = 0, MapKey = 0, DescSize = 0;
     UINT32 DescVer = 0;
     EFI_MEMORY_DESCRIPTOR* MemMap = NULL;
-    EFI_STATUS EStatus;
-    EStatus = gBS->GetMemoryMap(&MapSize, MemMap, &MapKey, &DescSize, &DescVer);
-    if (EStatus == EFI_BUFFER_TOO_SMALL) {
-        MemMap = AllocatePool(MapSize);
-        if (MemMap) {
+    EFI_STATUS EStatus = EFI_SUCCESS;
+
+    const int max_retries = 8;
+    int attempt = 0;
+    while (attempt++ < max_retries) {
+        MapSize = 0;
+        EStatus = gBS->GetMemoryMap(&MapSize, MemMap, &MapKey, &DescSize, &DescVer);
+        if (EStatus == EFI_BUFFER_TOO_SMALL) {
+            if (MemMap) { FreePool(MemMap); MemMap = NULL; }
+            MemMap = AllocatePool(MapSize);
+            if (!MemMap) { EStatus = EFI_OUT_OF_RESOURCES; break; }
             EStatus = gBS->GetMemoryMap(&MapSize, MemMap, &MapKey, &DescSize, &DescVer);
         }
+
+        if (EFI_ERROR(EStatus)) {
+            /* Unexpected error; retry a couple times */
+            CpuPause();
+            continue;
+        }
+
+        /* Try to exit boot services; if it fails with EFI_INVALID_PARAMETER the map changed -> retry */
+        EStatus = gBS->ExitBootServices(gImageHandle, MapKey);
+        if (EStatus == EFI_INVALID_PARAMETER) {
+            /* Map changed between GetMemoryMap and ExitBootServices; retry */
+            CpuPause();
+            continue;
+        }
+
+        /* On success or other error, break and handle below */
+        break;
     }
-    if (!EFI_ERROR(EStatus)) {
-        gBS->ExitBootServices(gImageHandle, MapKey);
+
+    if (MemMap) { FreePool(MemMap); MemMap = NULL; }
+    if (EFI_ERROR(EStatus)) {
+        Print(L"Failed to exit boot services (status=%r)\n", EStatus);
+        return EFI_LOAD_ERROR;
     }
-    if (MemMap) FreePool(MemMap);
+
     EntryPoint(hdr);
 
     return EFI_LOAD_ERROR;
@@ -1165,6 +1196,19 @@ ExecuteKernelWithCoreboot (
         boot_params->boot_flags |= COREBOOT_BOOT_FLAG_INITRD;
     }
 
+    /* Ensure kernel is placed at chosen Coreboot region. The Coreboot memory map
+       provides physical addresses; copy the kernel buffer into the selected
+       kernel_base region so boot params and entry point are consistent. */
+    if (KernelSize > largest_size) {
+        Print(L"Kernel size %u exceeds selected Coreboot region of %u bytes\n", KernelSize, largest_size);
+        return EFI_BAD_BUFFER_SIZE;
+    }
+
+    VOID* kernel_target = (VOID*)(UINTN)kernel_base;
+    CopyMem(kernel_target, KernelBuffer, (UINTN)KernelSize);
+    /* Use the kernel target as the canonical kernel buffer/entry point from now on */
+    KernelBuffer = kernel_target;
+
     // Validate boot parameters structure
     if (!ValidateBootParameters(boot_params)) {
         Print(L"Boot parameters validation failed\n");
@@ -1270,24 +1314,35 @@ ExitBootServicesAndExecuteKernel (
     UINT32 DescVer = 0;
     EFI_MEMORY_DESCRIPTOR* MemMap = NULL;
 
-    // Get memory map for ExitBootServices
-    Status = gBS->GetMemoryMap(&MapSize, MemMap, &MapKey, &DescSize, &DescVer);
-    if (Status == EFI_BUFFER_TOO_SMALL) {
-        MemMap = AllocatePool(MapSize);
-        if (!MemMap) {
-            return EFI_OUT_OF_RESOURCES;
-        }
+    // Robustly get the memory map and exit boot services (handle concurrent map updates)
+    Status = EFI_SUCCESS;
+    const int max_retries = 8;
+    int attempt = 0;
+    while (attempt++ < max_retries) {
+        MapSize = 0;
         Status = gBS->GetMemoryMap(&MapSize, MemMap, &MapKey, &DescSize, &DescVer);
-    }
+        if (Status == EFI_BUFFER_TOO_SMALL) {
+            if (MemMap) { FreePool(MemMap); MemMap = NULL; }
+            MemMap = AllocatePool(MapSize);
+            if (!MemMap) { Status = EFI_OUT_OF_RESOURCES; break; }
+            Status = gBS->GetMemoryMap(&MapSize, MemMap, &MapKey, &DescSize, &DescVer);
+        }
 
-    if (EFI_ERROR(Status)) {
-        Print(L"Failed to get memory map for boot services exit\n");
-        if (MemMap) FreePool(MemMap);
-        return Status;
-    }
+        if (EFI_ERROR(Status)) {
+            CpuPause();
+            continue;
+        }
 
-    // Exit boot services
-    Status = gBS->ExitBootServices(gImageHandle, MapKey);
+        Status = gBS->ExitBootServices(gImageHandle, MapKey);
+        if (Status == EFI_INVALID_PARAMETER) {
+            /* Map changed between GetMemoryMap and ExitBootServices; retry */
+            CpuPause();
+            continue;
+        }
+
+        /* Either succeeded or failed with a different error */
+        break;
+    }
 
     if (EFI_ERROR(Status)) {
         Print(L"Failed to exit boot services: %r\n", Status);

@@ -1,7 +1,7 @@
 [Defines]
   INF_VERSION            = 0x00010005
   BASE_NAME              = BloodHorn
-  FILE_GUID              = DEADBEEF-DEAD-BEEF-DEAD-DEADBEEF0001
+  FILE_GUID              = BLOODHORN-500-BEEF-DEAD-BLOODBLO0001
   MODULE_TYPE            = UEFI_APPLICATION
   ENTRY_POINT            = UefiMain
   VERSION_STRING         = 1.0

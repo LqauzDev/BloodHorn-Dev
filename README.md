@@ -1,284 +1,63 @@
 # BloodHorn
 
 <p align="center">
-  <img src="./Z.png" alt="BloodHorn Logo" width="500"/>
+  <img src="./Z.png" alt="BloodHorn Logo" width="420"/>
   <br>
-  <em>Fast, secure, and reliable system bootstrapping</em>
+  <em>Fast, secure, and reliable system bootloader</em>
 </p>
 
-![Code Quality](quality_badge.svg)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Platform](https://img.shields.io/badge/platform-x86__64%20%7C%20ARM64%20%7C%20RISC--V%20%7C%20LoongArch-blue)](https://codeberg.org/PacHashs/BloodHorn)[![Build Status](https://ci.codeberg.org/api/badges/PacHashs/BloodHorn/status.svg)](https://ci.codeberg.org/PacHashs/BloodHorn)
-## About BloodHorn
+[![Quality](quality_badge.svg)](./) [![Build Status](https://ci.codeberg.org/api/badges/PacHashs/BloodHorn/status.svg)](https://ci.codeberg.org/PacHashs/BloodHorn) [![Platform](https://img.shields.io/badge/platform-x86__64%20%7C%20ARM64%20%7C%20RISC--V%20%7C%20LoongArch-blue)](https://codeberg.org/PacHashs/BloodHorn) [![License](https://img.shields.io/badge/License-BSD--2--Clause--Patent-blue.svg)](LICENSE)
+## About
+BloodHorn is a compact, extensible bootloader built with EDK2 and optional Coreboot payload support. It targets UEFI and legacy workflows on multiple architectures and emphasizes secure module verification and maintainability.
 
-BloodHorn is a modern, high-performance bootloader built on the EDK2 framework with Coreboot integration. Designed for speed, security, and reliability, it provides a robust foundation for system initialization across multiple architectures.
+## Safety & Audience
+BloodHorn operates at firmware level and can affect device boot and data. Read `SECURITY.md` before use and back up any existing bootloaders.
 
-## Important Safety Notice
+Intended audience: firmware engineers, OS developers, and security researchers.
 
-BloodHorn is a low-level system component that interacts directly with hardware. Incorrect use may result in system damage, data loss, or security vulnerabilities.
+## CI
+We run CI builds and tests on the public pipeline. See `.woodpecker.yml` for details and the CI dashboard for current status.
 
-### Intended Audience
-- System firmware developers
-- Security researchers
-- Embedded systems engineers
-- Advanced users with recovery capabilities
+## Support
+If you find BloodHorn useful, see `CONTRIBUTING.md` or support via the project's sponsorship links.
 
-### Technical Requirements
-- UEFI/BIOS and system architecture knowledge
-- Low-level programming experience (C, assembly) or at least knowing fundumentals of dealing with low level components
-- Secure boot and firmware security understanding
-- Hardware recovery tools and procedures
+## Getting started
 
-### System Impact
-BloodHorn operates at the hardware level with the following characteristics:
-- Multi-architecture support (x86_64, ARM, RISC-V, LoongArch)
-- EDK2 Framework Integration
-- Coreboot Payload Support
-- Security features including TPM and secure boot
-- Modular plugin architecture
-
-Note: The BloodHorn team is not responsible for any hardware damage or data loss resulting from the use of this software.
-
-## Project History
-
-### Origins (2016)
-The BloodHorn project began as an ambitious bootloader prototype in 2016. The initial version, though basic, demonstrated the core concepts that would evolve into the modern BloodHorn bootloader.
-
-![First BloodHorn Screenshot (2016)](./2016screenshot.png)
-*The original BloodHorn interface from 2016, showing the first successful boot sequence*
-
-### Development Timeline
-- **2016**: Initial prototype developed by an anonymous contributor
-- **2017**: Core architecture established with basic boot functionality
-- **2018-2019**: Major refactoring and feature additions
-- **2020-2021**: Security enhancements and performance optimizations
-- **2022-2023**: Multi-architecture support and advanced features
-- **2024-Present**: Active maintenance and community contributions
-
-### Project Philosophy
-BloodHorn is built with a focus on:
-- **Reliability**: Rock-solid performance in all conditions
-- **Efficiency**: Minimal resource usage, maximum speed
-- **Security**: Built-in protections against common threats
-- **Extensibility**: Modular design for future expansion
-- **Community**: Open development with active contributor support
-
-## CI/CD Pipeline
-
-BloodHorn uses Woodpecker CI for continuous integration and deployment. The pipeline ensures code quality, build verification, and automated testing across multiple platforms.
-
-### Pipeline Overview
-
-- **Build Pipeline**: Compiles the codebase for all supported architectures
-- **Test Pipeline**: Runs unit and integration tests
-- **Release Pipeline**: Handles versioned releases and deployment
-
-### Pipeline Status
-
-[![Build Status](https://ci.codeberg.org/api/badges/PacHashs/BloodHorn/status.svg)](https://ci.codeberg.org/PacHashs/BloodHorn)
-
-### Pipeline Configuration
-
-The pipeline is configured using `.woodpecker.yml` in the root directory. Key features include:
-
-- **Matrix Builds**: Parallel builds for multiple architectures (x86_64, ARM64, RISC-V, LoongArch)
-- **Caching**: Optimized build times with dependency caching
-- **Artifacts**: Build artifacts are stored and available for download
-- **Security Scans**: Automated security scanning of dependencies and code
-- **Code Quality**: Static analysis and code style checks
-
-### Local Development
-
-To run the pipeline locally:
-
-```bash
-# Install Woodpecker CLI
-curl -sL https://woodpecker.ci.org/install.sh | sh
-
-# Run the pipeline locally
-woodpecker exec
-```
-
-### Pipeline Steps
-
-1. **Setup**: Install dependencies and set up the build environment
-2. **Build**: Compile the code for all target platforms
-3. **Test**: Run automated tests
-4. **Package**: Create distributable packages
-5. **Deploy**: Deploy to staging or production (on release)
-
-### Monitoring
-
-Pipeline status and logs are available at [ci.codeberg.org/PacHashs/BloodHorn](https://ci.codeberg.org/PacHashs/BloodHorn)
-
-## Support Me
-
-If you like this project and want to support me, you can donate through [Liberapay](https://liberapay.com/Listedroot/donate).
-
-[![Donate using Liberapay](https://liberapay.com/assets/widgets/donate.svg)](https://liberapay.com/Listedroot/donate)
-
-
-## Getting Started
-
-### Prerequisites
-- Git
-- Python 3.7 or later
-- C/C++ toolchain (GCC/Clang on Linux/macOS, MSVC on Windows)
-- EDK2 (pre-installed and configured)
-
-### Building from Source
-
-#### Prerequisites
-- Git
-- Python 3.7 or later
-- C/C++ toolchain (GCC/Clang on Linux/macOS, MSVC on Windows)
-- EDK2 BaseTools (included in Edk2BHModules)
-- NASM (for assembly components)
-- iASL (for ACPI support)
-
-#### Linux/macOS
-```bash
-git clone --recursive https://codeberg.org/PacHashs/BloodHorn.git
-cd BloodHorn
-# Build BaseTools if not already built
-make -C Edk2BHModules/BaseTools
-# Set up build environment
-source edksetup.sh
-# Build BloodHorn (Release)
-build -p BloodHorn.dsc -b RELEASE -t GCC5 -a X64 -n $(nproc)
-# Or for Debug build with Coreboot support
-# build -p BloodHorn.dsc -b DEBUG -t GCC5 -a X64 -n $(nproc) -D COREBOOT_ENABLED=1
-```
-
-#### Windows
-```cmd
-git clone --recursive https://codeberg.org/PacHashs/BloodHorn.git
-cd BloodHorn
-:: Build BaseTools if not already built
-cd Edk2BHModules\BaseTools
-nmake
-cd ..\..
-:: Set up environment (run from Visual Studio x64 Native Tools Command Prompt)
-:: Build BloodHorn (Release)
-build -p BloodHorn.dsc -b RELEASE -t VS2019 -a X64
-:: Or for Debug build with Coreboot support
-:: build -p BloodHorn.dsc -b DEBUG -t VS2019 -a X64 -D COREBOOT_ENABLED=1
-```
-
-Output files:
-- `Build/BloodHorn/RELEASE_<TOOLCHAIN>/X64/BloodHorn.efi`
-- `Build/BloodHorn/DEBUG_<TOOLCHAIN>/X64/BloodHorn.efi`
+Prerequisites: Git, an EDK2 toolchain, and a C toolchain (GCC/Clang or MSVC).
 
 ## Installation
 
-### Linux/macOS
-```bash
-# Mount EFI partition (if not already mounted)
-mount /dev/sdX1 /mnt/efi
+Install by copying the built `BloodHorn.efi` to your EFI partition; back up your current bootloader first.
 
-# Install BloodHorn
-cp Build/BloodHorn/RELEASE_GCC5/X64/BloodHorn.efi /mnt/efi/EFI/BOOT/BOOTX64.EFI
-```
-
-### Windows (Admin)
-```cmd
-:: Install to default boot location
-copy Build\BloodHorn\RELEASE_VS2019\X64\BloodHorn.efi C:\EFI\Microsoft\Boot\bootmgfw.efi
-```
-
-> **Note:** Always back up your existing bootloader before installation.
-
-## Project Structure
-
-```
-BloodHorn/
-├── BloodHorn.dsc       # Main build configuration
-├── BloodHorn.fdf       # FD image layout
-├── BloodHorn.inf       # Module definition
-├── coreboot/           # Coreboot integration
-├── uefi/              # UEFI implementation
-├── security/          # TPM and security features
-├── fs/                # Filesystem support
-├── net/               # Network booting
-└── plugins/           # Extensible modules
-```
+## Layout
+Top-level folders include `coreboot/`, `uefi/`, `security/`, `fs/`, `net/`, and `plugins/`.
 
 ## Features
 
-- **Architectures**: x86_64, ARM64, RISC-V, LoongArch
-- **Security**: Secure Boot, TPM 2.0, file verification
-- **Firmware**: Coreboot + UEFI hybrid
-- **Configuration**: INI/JSON/UEFI variables
-- **UI**: Text and graphical interfaces with localization
-- **Performance**: Optimized boot times
-   ```
+- Multi-architecture support (x86_64, ARM64, RISC-V, LoongArch)
+- Secure Boot and TPM 2.0 support
+- Coreboot payload support and UEFI integration
 
-4. **Basic Configuration**:
-   Create a minimal `bloodhorn.ini` at your EFI partition root:
-   ```ini
-   [boot]
-   default = linux
-   menu_timeout = 5
-   language = en
-   font_path = /fonts/ter-16n.psf
+## History
 
-   [linux]
-   kernel = /boot/vmlinuz
-   initrd = /boot/initrd.img
-   cmdline = root=/dev/sda1 ro quiet
-- **Recovery Mode**: For when you thought "rm -rf /" was a good idea at 3 AM
-- **Boot Speed**: Faster than you can say "I'll just check Reddit while I wait"
+BloodHorn started as an early bootloader prototype in 2016 and has since evolved into a cross-architecture payload with a focus on security and maintainability.
 
-## Coreboot Integration
+![First BloodHorn Screenshot (2016)](./2016screenshot.png)
 
-BloodHorn features comprehensive Coreboot firmware integration through the CorebootPayloadPkg. When built with Coreboot support, it provides:
-
-- **Automatic Detection**: Automatically detects when running as a Coreboot payload
-- **Hybrid Initialization**: Leverages Coreboot's hardware initialization while maintaining UEFI compatibility
-- **Memory Management**: Proper handling of Coreboot memory maps and tables
-- **Hardware Access**: Direct access to Coreboot-provided hardware information
-- **Performance**: Optimized boot path when running on Coreboot
-
-### Building with Coreboot Support
-
-To enable Coreboot payload support, use the `COREBOOT_ENABLED` flag during build:
-
-```bash
-build -p BloodHorn.dsc -b RELEASE -t GCC5 -a X64 -D COREBOOT_ENABLED=1
-```
-
-### CorebootPayloadPkg
-
-The CorebootPayloadPkg provides the following features:
-- Coreboot table parsing and validation
-- Memory map translation between Coreboot and UEFI formats
-- Hardware information extraction from Coreboot tables
-- Integration with the main BloodHorn bootloader
-
-For more details, see the [CorebootPayloadPkg documentation](Edk2BHModules/CorebootPayloadPkg/README.rst).
-
+## Configuration
+Create a minimal `bloodhorn.ini` next to `BloodHorn.efi` on the EFI partition:
 ## FAQ
 
-### What is the size of BloodHorn?
-The BloodHorn source code is approximately 14 MiB. After compilation, the bootloader binary can grow up to 30 MiB, depending on the enabled features, optimizations, and target architecture. The size may vary based on the build configuration and included modules.
-
-### How do I contribute to BloodHorn?
-Contributions are welcome! Please see our contribution guidelines in the docs/ directory and feel free to open issues or submit pull requests on our Codeberg repository.
-
-### Does BloodHorn support Secure Boot?
-Yes, BloodHorn includes comprehensive Secure Boot support with TPM 2.0 integration and cryptographic verification of all loaded modules.
-
-### Does BloodHorn support Coreboot firmware?
-Yes, BloodHorn features comprehensive Coreboot firmware integration with automatic detection and hybrid initialization. When running as a Coreboot payload, it leverages Coreboot's direct hardware control for enhanced performance while maintaining UEFI compatibility for broader system support.
+- What architectures are supported? - x86_64, ARM64, RISC-V, LoongArch.
+- Is Secure Boot supported? - Yes. BloodHorn includes Secure Boot support and optional TPM verification.
+- How to contribute? - See `CONTRIBUTING.md` and open issues or PRs on the project repo.
 
 ## Contributors
 
-- **[PacHash](https://github.com/PacHashs)** - Lead Developer
-- **[BillNyeTheScienceGuy](https://codeberg.org/BillNyeTheSienceGuy)** - Main Team
+See `maintainers.py` and the project contributors list.
 
 ---
 
-*BloodHorn was inspired by modern bootloaders, but all code is original and written from scratch for educational purposes and for use in future operating systems.*
+![BSD License](bsd.svg)
 
-## License
-licensed under BSD-2-Clause-Patent License
+BloodHorn is licensed under the BSD-2-Clause-Patent License. See `LICENSE` for details.

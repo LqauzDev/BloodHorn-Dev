@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="360" height="80" viewBox="0 0 360 80">
+  <rect width="360" height="80" rx="8" fill="#0b63b8" />
+  <g font-family="Segoe UI, Roboto, Helvetica, Arial, sans-serif" fill="#fff">
+    <text x="20" y="50" font-size="28" font-weight="700">BSD-2-Clause-Patent</text>
+  </g>
+</svg>
