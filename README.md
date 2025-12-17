@@ -21,13 +21,43 @@ We run CI builds and tests on the public pipeline. See `.woodpecker.yml` for det
 ## Support
 If you find BloodHorn useful, see `CONTRIBUTING.md` or support via the project's sponsorship links.
 
-## Getting started
+## Build and installation (from source)
 
-Prerequisites: Git, an EDK2 toolchain, and a C toolchain (GCC/Clang or MSVC).
+Note: This repository does not include prebuilt binaries. Build from source; see `INSTALL.md` for comprehensive, platform-specific instructions.
 
-## Installation
+### Example build (Ubuntu/Debian)
 
-Install by copying the built `BloodHorn.efi` to your EFI partition; back up your current bootloader first.
+```bash
+# Install common dependencies
+sudo apt update
+sudo apt install -y build-essential nasm uuid-dev acpica-tools python3 qemu-system-x86 ovmf xorriso gcc-aarch64-linux-gnu gcc-riscv64-linux-gnu
+
+# Clone and set up EDK2
+git clone --depth 1 https://github.com/tianocore/edk2.git
+cd edk2
+git submodule update --init
+make -C BaseTools
+export EDK_TOOLS_PATH=$(pwd)/BaseTools
+export PACKAGES_PATH=$(pwd):$(pwd)/..
+. edksetup.sh
+
+# Prepare and build BloodHorn (from edk2 root)
+cp -r ../BloodHorn .
+build -a X64 -p BloodHorn.dsc -b RELEASE -t GCC5
+```
+
+Artifacts: `Build/BloodHorn/RELEASE_GCC5/X64/BloodHorn.efi` (UEFI) and BIOS artifacts under `Build/.../bios/`.
+
+Installation (UEFI example)
+
+```bash
+sudo mount /dev/sda1 /mnt/efi   # adjust device
+sudo mkdir -p /mnt/efi/EFI/BloodHorn
+sudo cp Build/BloodHorn/RELEASE_GCC5/X64/BloodHorn.efi /mnt/efi/EFI/BloodHorn/BloodHorn.efi
+sudo umount /mnt/efi
+```
+
+For Windows installation, USB image creation, PXE/HTTP boot, and detailed build options, see `INSTALL.md`.
 
 ## Layout
 Top-level folders include `coreboot/`, `uefi/`, `security/`, `fs/`, `net/`, and `plugins/`.
