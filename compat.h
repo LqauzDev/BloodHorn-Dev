@@ -13,6 +13,9 @@
   #include <stddef.h>
   #include <string.h>
 
+  // Include cc-runtime for compiler compatibility
+  #include "cc-runtime/src/cc-runtime.c"
+
   // Type aliases (like EDK2)
   typedef uint8_t   UINT8;
   typedef uint16_t  UINT16;

@@ -68,6 +68,9 @@ export PACKAGES_PATH=$(pwd):$(pwd)/..
 
 # Copy and build BloodHorn
 cp -r ../BloodHorn .
+cd BloodHorn
+git submodule update --init  # Initialize dependencies (FreeType, Edk2BH, cc-runtime)
+cd ..
 build -a X64 -p BloodHorn.dsc -t GCC5
 
 # Create bootable ISO

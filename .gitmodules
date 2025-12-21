@@ -4,3 +4,6 @@
 [submodule "Edk2BH"]
 	path = Edk2BH
 	url = https://codeberg.org/BloodyHell-Industries-INC/Edk2BH.git
+[submodule "cc-runtime"]
+	path = cc-runtime
+	url = https://codeberg.org/OSDev/cc-runtime.git

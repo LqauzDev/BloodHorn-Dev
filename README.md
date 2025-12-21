@@ -27,16 +27,23 @@ BloodHorn uses the following external dependencies as Git submodules:
 
 - **FreeType** (`boot/freetype`): Font rendering library for TTF/OTF support
   - Repository: https://gitlab.freedesktop.org/freetype/freetype.git
-  - Automatically initialized with `git submodule update --init`
+  - Initialized with `git submodule update --init`
 
 - **Edk2BH** (`Edk2BH`): Modified EDK2 firmware framework
   - Repository: https://codeberg.org/BloodyHell-Industries-INC/Edk2BH.git
   - Custom EDK2 modifications for BloodHorn bootloader
-  - Automatically initialized with `git submodule update --init`
+  - Initialized with `git submodule update --init`
+
+- **cc-runtime** (`cc-runtime`): Freestanding compiler runtime library
+  - Repository: https://codeberg.org/OSDev/cc-runtime.git
+  - Subset of LLVM's compiler-rt libgcc-compatibility functions for bare-metal environments
+  - Credits: Compressed and packaged by **mintsuki** for easy integration
+  - Original: LLVM compiler-rt project and maintainers
+  - Initialized with `git submodule update --init`
 
 ## Build and installation (from source)
 
-Note: This repository does not include prebuilt binaries. Build from source; see `INSTALL.md` for comprehensive, platform-specific instructions.
+Note: This repository does not include prebuilt binaries. Build from source; see `INSTALL.md` for platform-specific instructions.
 
 ### Example build (Ubuntu/Debian)
 
