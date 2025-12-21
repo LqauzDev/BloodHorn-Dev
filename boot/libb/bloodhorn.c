@@ -371,7 +371,15 @@ void bh_shutdown(void) {
     }
     
     // Shutdown subsystems
-    // TODO: Add subsystem shutdown calls here
+    if (bh_system_table && bh_system_table->puts) {
+        bh_system_table->puts("Shutting down BloodHorn subsystems");
+    }
+    
+    // Flush any pending debug output
+    bh_debug_flush();
+    
+    // Clear any cached data
+    bh_clear_cache();
     
     // Reset state
     bh_initialized = false;
