@@ -6,7 +6,10 @@
   <em>Fast, secure, and reliable system bootloader</em>
 </p>
 
-[![Quality](quality_badge.svg)](./) [![Build Status](https://ci.codeberg.org/api/badges/PacHashs/BloodHorn/status.svg)](https://ci.codeberg.org/PacHashs/BloodHorn) [![Platform](https://img.shields.io/badge/platform-x86__64%20%7C%20ARM64%20%7C%20RISC--V%20%7C%20LoongArch-blue)](https://codeberg.org/PacHashs/BloodHorn) [![License](https://img.shields.io/badge/License-BSD--2--Clause--Patent-blue.svg)](LICENSE)
+[![Quality](quality_badge.svg)](./) [![Build Status](https://ci.codeberg.org/api/badges/PacHashs/BloodHorn/status.svg)](https://ci.codeberg.org/PacHashs/BloodHorn) [![Platform](https://img.shields.io/badge/platform-x86__64%20%7C%20ARM64%20%7C%20RISC--V%20%7C%20LoongArch-blue)](https://codeberg.org/PacHashs/BloodHorn) [![License](https://img.shields.io/badge/License-BSD--2--Clause--Patent-blue.svg)](LICENSE) 
+[![OpenSSF Best Practices](https://bestpractices.dev/projects/11541/badge.svg)](https://www.bestpractices.dev/projects/11541)
+
+
 ## About
 BloodHorn is a compact, extensible bootloader built with EDK2 and optional Coreboot payload support. It targets UEFI and legacy workflows on multiple architectures and emphasizes secure module verification and maintainability.
 
