@@ -12,7 +12,7 @@ for additional functionality:
 
 Currently only `bhshim` is wired into the C/EDK2 side; the others are features to be used within the `rust` folder.
 
-These Rust crates are **internal helpers**, not marketing fluff:
+These Rust crates are **internal helpers**, not marketing stuff.
 
 - They exist to make Rust-based parts of BloodHorn safer and easier to implement.
 - They are compiled as separate static libraries and only affect the final bootloader
