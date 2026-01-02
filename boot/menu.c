@@ -64,7 +64,7 @@
  *   code only reads or mutates this state; it does not duplicate it.
  */
 
-// Boot menu entry structure: a human readable name + a callback to execute.
+// Boot menu entry structure: a human readable name + a callback to execute. (hopefully)
 typedef struct {
     CHAR16 Name[MAX_ENTRY_LENGTH];
     EFI_STATUS (*BootFunction)(VOID);

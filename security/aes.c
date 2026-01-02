@@ -534,6 +534,6 @@ void aes_hw_decrypt_block(const uint8_t* key, uint32_t key_bits, const uint8_t* 
 
 // Legacy function (for backward compatibility)
 void aes_encrypt_block(const uint8_t* in, uint8_t* out, const uint8_t* key) {
-    // Simple XOR implementation (original basic version)
+    // Simple XOR implementation
     for (int i = 0; i < 16; ++i) out[i] = in[i] ^ key[i];
 }
