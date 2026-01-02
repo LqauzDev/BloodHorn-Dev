@@ -299,6 +299,12 @@ int crypto_aes_cbc_decrypt(const crypto_aes_ctx_t* ctx, const uint8_t* iv, const
 }
 
 // GCM mode helper functions
+static void xor_block(uint8_t* dst, const uint8_t* a, const uint8_t* b) {
+    for (int i = 0; i < 16; i++) {
+        dst[i] = a[i] ^ b[i];
+    }
+}
+
 void aes_gcm_gf_mult(const uint8_t* a, const uint8_t* b, uint8_t* result) {
     uint8_t z[16] = {0};
     uint8_t v[16];
@@ -351,271 +357,179 @@ void aes_gcm_inc32(uint8_t* block) {
     block[15] = counter & 0xFF;
 }
 
-// GCM mode implementation
-int crypto_aes_gcm_encrypt(const crypto_aes_ctx_t* ctx, const uint8_t* iv, uint32_t iv_len, const uint8_t* aad, uint32_t aad_len, const uint8_t* plaintext, uint32_t len, uint8_t* ciphertext, uint8_t* tag) {
-    if (!ctx || !iv || !ciphertext || !tag) return CRYPTO_ERROR_INVALID_PARAM;
-    
-    uint8_t h[16] = {0};
-    uint8_t j0[16] = {0};
-    uint8_t ghash_result[16] = {0};
-    
-    // Calculate H = E(K, 0^128)
-    crypto_aes_encrypt_block(ctx, h, h);
-    
-    // Calculate J0
+/* =========================
+   GCM – FIXED IMPLEMENTATION
+   ========================= */
+
+static void gcm_build_j0(
+    const uint8_t *h,
+    const uint8_t *iv, uint32_t iv_len,
+    uint8_t j0[16]
+) {
+    memset(j0, 0, 16);
+
     if (iv_len == 12) {
         memcpy(j0, iv, 12);
         j0[15] = 1;
-    } else {
-        // For IV lengths != 12, use GHASH
-        aes_gcm_ghash(h, iv, iv_len, j0);
-        uint8_t len_block[16] = {0};
-        uint64_t iv_bits = iv_len * 8;
-        len_block[8] = (iv_bits >> 56) & 0xFF;
-        len_block[9] = (iv_bits >> 48) & 0xFF;
-        len_block[10] = (iv_bits >> 40) & 0xFF;
-        len_block[11] = (iv_bits >> 32) & 0xFF;
-        len_block[12] = (iv_bits >> 24) & 0xFF;
-        len_block[13] = (iv_bits >> 16) & 0xFF;
-        len_block[14] = (iv_bits >> 8) & 0xFF;
-        len_block[15] = iv_bits & 0xFF;
-        aes_gcm_gf_mult(j0, h, j0);
-        for (int i = 0; i < 16; i++) j0[i] ^= len_block[i];
-        aes_gcm_gf_mult(j0, h, j0);
+        return;
     }
-    
-    // Encrypt plaintext
-    uint8_t counter[16];
-    memcpy(counter, j0, 16);
-    aes_gcm_inc32(counter);
-    
-    for (uint32_t i = 0; i < len; i += AES_BLOCK_SIZE) {
-        uint8_t keystream[16];
-        crypto_aes_encrypt_block(ctx, counter, keystream);
-        
-        uint32_t block_len = (len - i < AES_BLOCK_SIZE) ? (len - i) : AES_BLOCK_SIZE;
-        for (uint32_t j = 0; j < block_len; j++) {
-            ciphertext[i + j] = plaintext[i + j] ^ keystream[j];
-        }
-        
-        aes_gcm_inc32(counter);
-        crypto_memzero_secure(keystream, sizeof(keystream));
-    }
-    
-    // Calculate authentication tag
+
+    aes_gcm_ghash(h, iv, iv_len, j0);
+
+    uint8_t len_block[16] = {0};
+    uint64_t iv_bits = (uint64_t)iv_len * 8;
+
+    for (int i = 0; i < 8; i++)
+        len_block[15 - i] = (iv_bits >> (i * 8)) & 0xFF;
+
+    xor_block(j0, j0, len_block);
+    aes_gcm_gf_mult(j0, h, j0);
+}
+
+static void gcm_compute_tag(
+    const crypto_aes_ctx_t *ctx,
+    const uint8_t *iv, uint32_t iv_len,
+    const uint8_t *aad, uint32_t aad_len,
+    const uint8_t *ciphertext, uint32_t len,
+    uint8_t tag[16]
+) {
+    uint8_t h[16] = {0};
+    uint8_t j0[16];
     uint8_t s[16] = {0};
-    
-    // GHASH(H, A)
-    if (aad && aad_len > 0) {
+    uint8_t tmp[16];
+
+    crypto_aes_encrypt_block(ctx, h, h);
+    gcm_build_j0(h, iv, iv_len, j0);
+
+    if (aad && aad_len)
         aes_gcm_ghash(h, aad, aad_len, s);
-    }
-    
-    // GHASH(H, C)
-    if (len > 0) {
-        aes_gcm_ghash(h, ciphertext, len, ghash_result);
-        for (int i = 0; i < 16; i++) s[i] ^= ghash_result[i];
+
+    if (len) {
+        aes_gcm_ghash(h, ciphertext, len, tmp);
+        xor_block(s, s, tmp);
         aes_gcm_gf_mult(s, h, s);
     }
-    
-    // Add length block
+
     uint8_t len_block[16] = {0};
-    uint64_t aad_bits = aad_len * 8;
-    uint64_t c_bits = len * 8;
-    len_block[0] = (aad_bits >> 56) & 0xFF;
-    len_block[1] = (aad_bits >> 48) & 0xFF;
-    len_block[2] = (aad_bits >> 40) & 0xFF;
-    len_block[3] = (aad_bits >> 32) & 0xFF;
-    len_block[4] = (aad_bits >> 24) & 0xFF;
-    len_block[5] = (aad_bits >> 16) & 0xFF;
-    len_block[6] = (aad_bits >> 8) & 0xFF;
-    len_block[7] = aad_bits & 0xFF;
-    len_block[8] = (c_bits >> 56) & 0xFF;
-    len_block[9] = (c_bits >> 48) & 0xFF;
-    len_block[10] = (c_bits >> 40) & 0xFF;
-    len_block[11] = (c_bits >> 32) & 0xFF;
-    len_block[12] = (c_bits >> 24) & 0xFF;
-    len_block[13] = (c_bits >> 16) & 0xFF;
-    len_block[14] = (c_bits >> 8) & 0xFF;
-    len_block[15] = c_bits & 0xFF;
-    
-    for (int i = 0; i < 16; i++) s[i] ^= len_block[i];
+    uint64_t a_bits = (uint64_t)aad_len * 8;
+    uint64_t c_bits = (uint64_t)len * 8;
+
+    for (int i = 0; i < 8; i++) {
+        len_block[7 - i]  = (a_bits >> (i * 8)) & 0xFF;
+        len_block[15 - i] = (c_bits >> (i * 8)) & 0xFF;
+    }
+
+    xor_block(s, s, len_block);
     aes_gcm_gf_mult(s, h, s);
-    
-    // Final tag = E(K, J0) XOR S
-    uint8_t j0_encrypted[16];
-    crypto_aes_encrypt_block(ctx, j0, j0_encrypted);
-    for (int i = 0; i < 16; i++) {
-        tag[i] = s[i] ^ j0_encrypted[i];
-    }
-    
-    crypto_memzero_secure(counter, sizeof(counter));
-    crypto_memzero_secure(j0_encrypted, sizeof(j0_encrypted));
+
+    crypto_aes_encrypt_block(ctx, j0, tmp);
+    xor_block(tag, s, tmp);
+
+    crypto_memzero_secure(h, sizeof(h));
+    crypto_memzero_secure(j0, sizeof(j0));
     crypto_memzero_secure(s, sizeof(s));
-    
-    return CRYPTO_SUCCESS;
+    crypto_memzero_secure(tmp, sizeof(tmp));
 }
 
-int crypto_aes_gcm_decrypt(const crypto_aes_ctx_t* ctx, const uint8_t* iv, uint32_t iv_len, const uint8_t* aad, uint32_t aad_len, const uint8_t* ciphertext, uint32_t len, const uint8_t* tag, uint8_t* plaintext) {
-    if (!ctx || !iv || !ciphertext || !tag || !plaintext) return CRYPTO_ERROR_INVALID_PARAM;
-    
-    // First verify the tag
-    uint8_t computed_tag[16];
-    
-    // Temporarily decrypt to compute tag (we'll do it again if verification passes)
-    uint8_t temp_plaintext[len];
-    
-    uint8_t h[16] = {0};
-    crypto_aes_encrypt_block(ctx, h, h);
-    
-    uint8_t j0[16] = {0};
-    if (iv_len == 12) {
-        memcpy(j0, iv, 12);
-        j0[15] = 1;
-    }
-    
+/* =========================
+   GCM ENCRYPT (FIXED)
+   ========================= */
+
+int crypto_aes_gcm_encrypt(
+    const crypto_aes_ctx_t* ctx,
+    const uint8_t* iv, uint32_t iv_len,
+    const uint8_t* aad, uint32_t aad_len,
+    const uint8_t* plaintext, uint32_t len,
+    uint8_t* ciphertext, uint8_t* tag
+) {
+    if (!ctx || !iv || !ciphertext || !tag)
+        return CRYPTO_ERROR_INVALID_PARAM;
+
     uint8_t counter[16];
-    memcpy(counter, j0, 16);
+    uint8_t keystream[16];
+    uint8_t h[16] = {0};
+
+    crypto_aes_encrypt_block(ctx, h, h);
+    gcm_build_j0(h, iv, iv_len, counter);
     aes_gcm_inc32(counter);
-    
-    // Decrypt for tag verification
-    for (uint32_t i = 0; i < len; i += AES_BLOCK_SIZE) {
-        uint8_t keystream[16];
+
+    for (uint32_t i = 0; i < len; i += 16) {
         crypto_aes_encrypt_block(ctx, counter, keystream);
-        
-        uint32_t block_len = (len - i < AES_BLOCK_SIZE) ? (len - i) : AES_BLOCK_SIZE;
-        for (uint32_t j = 0; j < block_len; j++) {
-            temp_plaintext[i + j] = ciphertext[i + j] ^ keystream[j];
-        }
-        
+        uint32_t bl = (len - i < 16) ? len - i : 16;
+        for (uint32_t j = 0; j < bl; j++)
+            ciphertext[i + j] = plaintext[i + j] ^ keystream[j];
         aes_gcm_inc32(counter);
-        crypto_memzero_secure(keystream, sizeof(keystream));
     }
-    
-    // Compute tag using the decrypted plaintext
-    crypto_aes_gcm_encrypt(ctx, iv, iv_len, aad, aad_len, temp_plaintext, len, (uint8_t*)ciphertext, computed_tag);
-    
-    // Verify tag
-    if (crypto_memcmp_constant_time(tag, computed_tag, 16) != 0) {
-        crypto_memzero_secure(temp_plaintext, len);
-        crypto_memzero_secure(computed_tag, sizeof(computed_tag));
-        return CRYPTO_ERROR_VERIFICATION_FAILED;
-    }
-    
-    // Tag verified, copy plaintext
-    memcpy(plaintext, temp_plaintext, len);
-    crypto_memzero_secure(temp_plaintext, len);
-    crypto_memzero_secure(computed_tag, sizeof(computed_tag));
-    
+
+    gcm_compute_tag(ctx, iv, iv_len, aad, aad_len, ciphertext, len, tag);
+    crypto_memzero_secure(counter, sizeof(counter));
+    crypto_memzero_secure(keystream, sizeof(keystream));
     return CRYPTO_SUCCESS;
 }
 
-// Hardware acceleration functions
+/* =========================
+   GCM DECRYPT (FIXED)
+   ========================= */
+
+int crypto_aes_gcm_decrypt(
+    const crypto_aes_ctx_t* ctx,
+    const uint8_t* iv, uint32_t iv_len,
+    const uint8_t* aad, uint32_t aad_len,
+    const uint8_t* ciphertext, uint32_t len,
+    const uint8_t* tag,
+    uint8_t* plaintext
+) {
+    if (!ctx || !iv || !ciphertext || !tag || !plaintext)
+        return CRYPTO_ERROR_INVALID_PARAM;
+
+    uint8_t expected_tag[16];
+    gcm_compute_tag(ctx, iv, iv_len, aad, aad_len, ciphertext, len, expected_tag);
+
+    if (crypto_memcmp_constant_time(tag, expected_tag, 16) != 0)
+        return CRYPTO_ERROR_VERIFICATION_FAILED;
+
+    uint8_t counter[16], keystream[16], h[16] = {0};
+
+    crypto_aes_encrypt_block(ctx, h, h);
+    gcm_build_j0(h, iv, iv_len, counter);
+    aes_gcm_inc32(counter);
+
+    for (uint32_t i = 0; i < len; i += 16) {
+        crypto_aes_encrypt_block(ctx, counter, keystream);
+        uint32_t bl = (len - i < 16) ? len - i : 16;
+        for (uint32_t j = 0; j < bl; j++)
+            plaintext[i + j] = ciphertext[i + j] ^ keystream[j];
+        aes_gcm_inc32(counter);
+    }
+
+    crypto_memzero_secure(expected_tag, sizeof(expected_tag));
+    crypto_memzero_secure(counter, sizeof(counter));
+    crypto_memzero_secure(keystream, sizeof(keystream));
+    return CRYPTO_SUCCESS;
+}
+
+/* =========================
+   AES-NI (SAFE DISABLED)
+   ========================= */
+
 int aes_hw_available(void) {
-    uint32_t eax, ebx, ecx, edx;
-    
-    // Check for AES-NI support (CPUID.01H:ECX.AES[bit 25])
-    __asm__ volatile (
-        "movl $1, %%eax\n\t"
-        "cpuid\n\t"
-        : "=a" (eax), "=b" (ebx), "=c" (ecx), "=d" (edx)
-        :
-        : "memory"
-    );
-    
-    return (ecx & (1 << 25)) ? 1 : 0;
+    return 0; /* Disabled: unsafe implementation removed */
 }
 
 void aes_hw_encrypt_block(const uint8_t* key, uint32_t key_bits, const uint8_t* plaintext, uint8_t* ciphertext) {
-    if (!aes_hw_available()) {
-        // Fall back to software implementation
-        crypto_aes_ctx_t ctx;
-        crypto_aes_init(&ctx, key, key_bits);
-        crypto_aes_encrypt_block(&ctx, plaintext, ciphertext);
-        crypto_zeroize_context(&ctx, sizeof(ctx));
-        return;
-    }
-    
-    // Use AES-NI instructions (simplified inline assembly)
-    uint32_t round_keys[60];
-    uint32_t rounds = aes_key_expansion(key, key_bits, round_keys);
-    
-    // Load plaintext
-    __asm__ volatile (
-        "movdqu %1, %%xmm0\n\t"  // Load plaintext
-        "movdqu %2, %%xmm1\n\t"  // Load first round key
-        "pxor %%xmm1, %%xmm0\n\t" // Initial AddRoundKey
-        : 
-        : "m" (*ciphertext), "m" (*plaintext), "m" (round_keys[0])
-        : "xmm0", "xmm1", "memory"
-    );
-    
-    // Perform AES rounds using AES-NI
-    for (uint32_t i = 1; i < rounds; i++) {
-        __asm__ volatile (
-            "movdqu %0, %%xmm1\n\t"   // Load round key
-            "aesenc %%xmm1, %%xmm0\n\t" // AES encrypt round
-            :
-            : "m" (round_keys[i*4])
-            : "xmm0", "xmm1", "memory"
-        );
-    }
-    
-    // Final round
-    __asm__ volatile (
-        "movdqu %1, %%xmm1\n\t"      // Load final round key
-        "aesenclast %%xmm1, %%xmm0\n\t" // AES encrypt last round
-        "movdqu %%xmm0, %0\n\t"      // Store result
-        : "=m" (*ciphertext)
-        : "m" (round_keys[rounds*4])
-        : "xmm0", "xmm1", "memory"
-    );
-    
-    crypto_memzero_secure(round_keys, sizeof(round_keys));
+    // Fall back to software implementation
+    crypto_aes_ctx_t ctx;
+    crypto_aes_init(&ctx, key, key_bits);
+    crypto_aes_encrypt_block(&ctx, plaintext, ciphertext);
+    crypto_zeroize_context(&ctx, sizeof(ctx));
 }
 
 void aes_hw_decrypt_block(const uint8_t* key, uint32_t key_bits, const uint8_t* ciphertext, uint8_t* plaintext) {
-    if (!aes_hw_available()) {
-        // Fall back to software implementation
-        crypto_aes_ctx_t ctx;
-        crypto_aes_init(&ctx, key, key_bits);
-        crypto_aes_decrypt_block(&ctx, ciphertext, plaintext);
-        crypto_zeroize_context(&ctx, sizeof(ctx));
-        return;
-    }
-    
-    // Similar to encrypt but with decrypt instructions
-    uint32_t round_keys[60];
-    uint32_t rounds = aes_key_expansion(key, key_bits, round_keys);
-    
-    __asm__ volatile (
-        "movdqu %1, %%xmm0\n\t"
-        "movdqu %2, %%xmm1\n\t"
-        "pxor %%xmm1, %%xmm0\n\t"
-        :
-        : "m" (*plaintext), "m" (*ciphertext), "m" (round_keys[rounds*4])
-        : "xmm0", "xmm1", "memory"
-    );
-    
-    for (uint32_t i = rounds - 1; i > 0; i--) {
-        __asm__ volatile (
-            "movdqu %0, %%xmm1\n\t"
-            "aesdec %%xmm1, %%xmm0\n\t"
-            :
-            : "m" (round_keys[i*4])
-            : "xmm0", "xmm1", "memory"
-        );
-    }
-    
-    __asm__ volatile (
-        "movdqu %1, %%xmm1\n\t"
-        "aesdeclast %%xmm1, %%xmm0\n\t"
-        "movdqu %%xmm0, %0\n\t"
-        : "=m" (*plaintext)
-        : "m" (round_keys[0])
-        : "xmm0", "xmm1", "memory"
-    );
-    
-    crypto_memzero_secure(round_keys, sizeof(round_keys));
+    // Fall back to software implementation
+    crypto_aes_ctx_t ctx;
+    crypto_aes_init(&ctx, key, key_bits);
+    crypto_aes_decrypt_block(&ctx, ciphertext, plaintext);
+    crypto_zeroize_context(&ctx, sizeof(ctx));
 }
 
 // Legacy function (for backward compatibility)

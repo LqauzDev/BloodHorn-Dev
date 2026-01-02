@@ -33,4 +33,9 @@ void aes_gcm_gf_mult(const uint8_t* a, const uint8_t* b, uint8_t* result);
 void aes_gcm_ghash(const uint8_t* h, const uint8_t* data, uint32_t len, uint8_t* result);
 void aes_gcm_inc32(uint8_t* block);
 
+// Internal GCM helper functions
+static void xor_block(uint8_t* dst, const uint8_t* a, const uint8_t* b);
+static void gcm_build_j0(const uint8_t* h, const uint8_t* iv, uint32_t iv_len, uint8_t j0[16]);
+static void gcm_compute_tag(const crypto_aes_ctx_t* ctx, const uint8_t* iv, uint32_t iv_len, const uint8_t* aad, uint32_t aad_len, const uint8_t* ciphertext, uint32_t len, uint8_t tag[16]);
+
 #endif
