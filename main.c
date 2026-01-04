@@ -1,10 +1,9 @@
 /*
  * main.c 
- * 
- * Written by alexander roman
  *
- * Hey there! Welcome to the main entry point of BloodHorn, our advanced UEFI bootloader.
- * This file is where all the magic happens - we're talking about booting operating systems,
+ *
+ * Welcome to the main entry point of BloodHorn, .
+ * This file is where all the magic happens  we're talking about booting operating systems,
  * managing hardware, handling security, and making sure everything works smoothly whether
  * you're running on plain UEFI or the fancy Coreboot + UEFI hybrid setup.
  * 
