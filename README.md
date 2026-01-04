@@ -6,7 +6,7 @@
   <em>Fast, secure, and reliable system bootloader</em>
 </p>
 
-[![Quality](quality_badge.svg)](./) [![Build Status](https://ci.codeberg.org/api/badges/PacHashs/BloodHorn/status.svg)](https://ci.codeberg.org/PacHashs/BloodHorn) [![Platform](https://img.shields.io/badge/platform-x86__64%20%7C%20ARM64%20%7C%20RISC--V%20%7C%20LoongArch-blue)](https://codeberg.org/PacHashs/BloodHorn) [![License](https://img.shields.io/badge/License-BSD--2--Clause--Patent-blue.svg)](LICENSE) 
+[![Quality](quality_badge.svg)](./) ![Azure DevOps builds](https://img.shields.io/badge/Azure%20Pipelines-succeeded-4c1?logo=azure-devops) [![Platform](https://img.shields.io/badge/platform-x86__64%20%7C%20ARM64%20%7C%20RISC--V%20%7C%20LoongArch-blue)](https://codeberg.org/PacHashs/BloodHorn) [![License](https://img.shields.io/badge/License-BSD--2--Clause--Patent-blue.svg)](LICENSE) 
 [![OpenSSF Best Practices](https://bestpractices.dev/projects/11541/badge.svg)](https://www.bestpractices.dev/projects/11541)
 
 
@@ -19,7 +19,7 @@ BloodHorn operates at firmware level and can affect device boot and data. Read `
 Intended audience: firmware engineers, OS developers, and security researchers.
 
 ## CI
-We run CI builds and tests on the public pipeline. See `.woodpecker.yml` for details and the CI dashboard for current status.
+We run CI builds and tests on a self-hosted Azure DevOps CI pipeline. See the [CI dashboard](https://ci-bloodhorn-bootloader-azure.netlify.app/) for current status.
 
 ## Support
 If you find BloodHorn useful, see `CONTRIBUTING.md` or support via the project's sponsorship links.
