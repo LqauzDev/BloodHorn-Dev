@@ -1,10 +1,11 @@
 /*
- * main.c
- * 
- * by alexander roman
+ * main.c 
  *
- * this is the main entry point for bloodhorn, a uefi bootloader that supports
- * both standard uefi systems and coreboot+uefi hybrid configurations.
+ *
+ * Welcome to the main entry point of BloodHorn, .
+ * This file is where all the magic happens  we're talking about booting operating systems,
+ * managing hardware, handling security, and making sure everything works smoothly whether
+ * you're running on plain UEFI or the fancy Coreboot + UEFI hybrid setup.
  * 
  * the bootloader handles:
  * - os kernel loading (linux, multiboot1/2, limine, chainloading)
