@@ -6,56 +6,79 @@
   <em>Fast, secure, and reliable system bootloader</em>
 </p>
 
-[![Quality](quality_badge.svg)](./) ![Azure DevOps builds](https://img.shields.io/badge/Azure%20Pipelines-succeeded-4c1?logo=azure-devops) [![Platform](https://img.shields.io/badge/platform-x86__64%20%7C%20ARM64%20%7C%20RISC--V%20%7C%20LoongArch-blue)](https://codeberg.org/PacHashs/BloodHorn) [![License](https://img.shields.io/badge/License-BSD--2--Clause--Patent-blue.svg)](LICENSE) 
-[![OpenSSF Best Practices](https://bestpractices.dev/projects/11541/badge.svg)](https://www.bestpractices.dev/projects/11541)
+## What is BloodHorn?
 
+BloodHorn is a modern bootloader built with a security + features + compact philosophy. We believe bootloaders should be secure without sacrificing usability, and feature-rich without being bloated. Built on EDK2 with optional Coreboot support, BloodHorn runs on pretty much anything with a CPU.
 
-## About
-BloodHorn is a compact, extensible bootloader built with EDK2 and optional Coreboot payload support. It targets UEFI and legacy workflows on multiple architectures and emphasizes secure module verification and maintainability.
+## Donate
+<button onclick="window.open('https://pay.oxapay.com/13185765', '_blank')" style="
+  background: #f12a02ff;
+  color: white;
+  border: none;
+  padding: 12px 24px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 16px;
+  font-weight: 600;
+  font-family: system-ui, -apple-system, sans-serif;
+  transition: background-color 0.2s;
+">
+   Donate with Crypto
+</button>
 
-## Safety & Audience
-BloodHorn operates at firmware level and can affect device boot and data. Read `SECURITY.md` before use and back up any existing bootloaders.
+<p style="margin-top: 15px; font-size: 14px; color: #666; line-height: 1.5;">
+  Support helps keep BloodHorn secure and actively developed. Contributions of code, testing, or crypto donations all help maintain the bootloader.
+</p>
 
-Intended audience: firmware engineers, OS developers, and security researchers.
+## Why BloodHorn?
 
-## CI
-We run CI builds and tests on a self-hosted Azure DevOps CI pipeline. See the [CI dashboard](https://ci-bloodhorn-bootloader-azure.netlify.app/) for current status.
+### Security First
+- TPM 2.0 integration for hardware-rooted trust
+- Secure Boot support with comprehensive chain of trust
+- SHA-512 kernel verification to ensure you're booting what you think you're booting
+- Constant-time operations and memory zeroization to prevent side-channel attacks
 
-## Support
-If you find BloodHorn useful, see `CONTRIBUTING.md` or support via the project's sponsorship links.
+### Actually Useful Features
+- Graphical boot menu with themes and mouse support
+- Multi-language support because not everyone speaks English
+- Recovery shell for when things go wrong
+- Network boot via PXE for enterprise environments
+- Multiple config formats (INI, JSON, UEFI variables)
+
+### Runs Everywhere
+- x86_64, ARM64, RISC-V, LoongArch, IA-32
+- UEFI and legacy BIOS support
+- Coreboot payload integration for embedded systems
+- Cross-platform compilation support
+
+## Safety First
+
+BloodHorn operates at firmware level, which means it can make or break your system's ability to boot. Read SECURITY.md before using and always back up your existing bootloader. This isn't your average application . a mistake here can render your system unbootable.
+
+Intended for firmware engineers, OS developers, and security researchers who know what they're doing.
 
 ## Dependencies
 
-BloodHorn uses the following external dependencies as Git submodules:
+BloodHorn uses a few external dependencies as Git submodules:
 
-- **FreeType** (`boot/freetype`): Font rendering library for TTF/OTF support
-  - Repository: https://gitlab.freedesktop.org/freetype/freetype.git
-  - Initialized with `git submodule update --init`
+- FreeType for font rendering (pretty text needs pretty fonts)
+- Edk2BH for our modified EDK2 firmware framework
+- cc-runtime for bare-metal compiler compatibility
 
-- **Edk2BH** (`Edk2BH`): Modified EDK2 firmware framework
-  - Repository: https://codeberg.org/BloodyHell-Industries-INC/Edk2BH.git
-  - Custom EDK2 modifications for BloodHorn bootloader
-  - Initialized with `git submodule update --init`
+Initialize with git submodule update --init after cloning.
 
-- **cc-runtime** (`cc-runtime`): Freestanding compiler runtime library
-  - Repository: https://codeberg.org/OSDev/cc-runtime.git
-  - Subset of LLVM's compiler-rt libgcc-compatibility functions for bare-metal environments
-  - Credits: Compressed and packaged by **mintsuki** for easy integration
-  - Original: LLVM compiler-rt project and maintainers
-  - Initialized with `git submodule update --init`
+## Building BloodHorn
 
-## Build and installation (from source)
+Note: No prebuilt binaries here - you build it yourself. See INSTALL.md for detailed platform-specific instructions.
 
-Note: This repository does not include prebuilt binaries. Build from source; see `INSTALL.md` for platform-specific instructions.
-
-### Example build (Ubuntu/Debian)
+Quick Ubuntu/Debian example:
 
 ```bash
-# Install common dependencies
+# Install dependencies
 sudo apt update
 sudo apt install -y build-essential nasm uuid-dev acpica-tools python3 qemu-system-x86 ovmf xorriso gcc-aarch64-linux-gnu gcc-riscv64-linux-gnu
 
-# Clone and set up EDK2
+# Set up EDK2
 git clone --depth 1 https://github.com/tianocore/edk2.git
 cd edk2
 git submodule update --init
@@ -64,59 +87,76 @@ export EDK_TOOLS_PATH=$(pwd)/BaseTools
 export PACKAGES_PATH=$(pwd):$(pwd)/..
 . edksetup.sh
 
-# Prepare and build BloodHorn (from edk2 root)
+# Build BloodHorn
 cp -r ../BloodHorn .
 cd BloodHorn
-git submodule update --init  # Initialize FreeType dependency
+git submodule update --init
 cd ..
 build -a X64 -p BloodHorn.dsc -b RELEASE -t GCC5
 ```
 
-Artifacts: `Build/BloodHorn/RELEASE_GCC5/X64/BloodHorn.efi` (UEFI) and BIOS artifacts under `Build/.../bios/`.
+You'll find BloodHorn.efi in Build/BloodHorn/RELEASE_GCC5/X64/ and BIOS artifacts under Build/.../bios/.
 
-Installation (UEFI example)
+Installation example (UEFI):
 
 ```bash
-sudo mount /dev/sda1 /mnt/efi   # adjust device
+sudo mount /dev/sda1 /mnt/efi   # adjust device as needed
 sudo mkdir -p /mnt/efi/EFI/BloodHorn
 sudo cp Build/BloodHorn/RELEASE_GCC5/X64/BloodHorn.efi /mnt/efi/EFI/BloodHorn/BloodHorn.efi
 sudo umount /mnt/efi
 ```
 
-For Windows installation, USB image creation, PXE/HTTP boot, and detailed build options, see `INSTALL.md`.
+See INSTALL.md for Windows installation, USB creation, PXE boot, and more options.
 
-## Layout
-Top-level folders include `coreboot/`, `uefi/`, `security/`, `fs/`, and `net/`.
-The `rust/` folder contains internal Rust `no_std` crates used for specific
-helper tasks (for example, a safe UEFI memory-map shim). See
-`docs/Rust-Integration.md` for details.
+## Project Structure
 
-## Features
+- coreboot/ - Coreboot payload integration
+- uefi/ - UEFI-specific code
+- security/ - Crypto, TPM, secure boot implementation
+- fs/ - Filesystem support (FAT32 primarily)
+- net/ - Network boot capabilities
+- rust/ - Internal no_std crates for safe memory management
+- boot/ - Main bootloader logic and UI
 
-- Multi-architecture support (x86_64, ARM64, RISC-V, LoongArch)
-- Secure Boot and TPM 2.0 support
-- Coreboot payload support and UEFI integration
+## Configuration
+
+BloodHorn is configurable through multiple formats:
+
+- bloodhorn.ini for simple configuration
+- bloodhorn.json for structured configuration
+- UEFI variables for enterprise deployments
+- Environment variables for containerized environments
+
+Place config files in the boot partition root. Check CONFIG.md for all options.
 
 ## History
 
-BloodHorn started as an early bootloader prototype in 2016 and has since evolved into a cross-architecture payload with a focus on security and maintainability.
+BloodHorn started as a prototype in 2016 and evolved into a cross-architecture bootloader focused on security and maintainability. We've learned a lot since then, including that plugin systems and Lua scripting were more trouble than they were worth (see FAQ.md for that story).
 
 ![First BloodHorn Screenshot (2016)](./2016screenshot.png)
 
-## Configuration
-Create a minimal `bloodhorn.ini` next to `BloodHorn.efi` on the EFI partition:
-## FAQ
+## Contributing
 
-- What architectures are supported? - x86_64, ARM64, RISC-V, LoongArch.
-- Is Secure Boot supported? - Yes. BloodHorn includes Secure Boot support and optional TPM verification.
-- How to contribute? - See `CONTRIBUTING.md` and open issues or PRs on the project repo.
+See CONTRIBUTING.md for contribution guidelines. We welcome PRs and issues from the community.
 
-## Contributors
+## CI/CD
 
-See `maintainers.py` and the project contributors list.
+We run CI builds and tests on Azure DevOps. Check the CI dashboard for current status.
 
----
+## Project Origin
 
-![BSD License](bsd.svg)
+BloodHorn is built from scratch as a modern bootloader implementation. While inspired by niche bootloaders like Limine and others in the open-source ecosystem, all code and intellectual property is owned by BloodyHell Industries INC (which is a legal entity under contracts that follow the USA law).
+
+This project was developed exclusively by human developers through manual coding processes. No artificial intelligence tools, automated code generation systems, or third-party code synthesis services were utilized in any phase of development. All source code represents original intellectual work created by the development team at BloodyHell Industries INC. We maintain complete authorship and copyright ownership of all codebase components.
+
+BloodHorn Industries INC hereby affirms under penalty of perjury that this project constitutes entirely original software development. All source code, algorithms, implementations, and architectural designs are the product of human intellectual effort by our development team. The project contains no copied, derived, or synthesized code from any external sources beyond standard protocol implementations and legally incorporated dependencies.
+
+Under 17 U.S.C. § 102 and applicable international copyright law, we maintain exclusive rights to all original works contained herein. Any allegations of plagiarism, code theft, or AI-generated content are unequivocally false and without merit. We maintain full legal title and copyright to all proprietary components of this codebase and will vigorously defend our intellectual property rights against any false claims.
+
+This statement is made in good faith and with full knowledge of its legal consequences under applicable state and federal laws.
+
+## License
 
 BloodHorn is licensed under the BSD-2-Clause-Patent License. See `LICENSE` for details.
+
+---
