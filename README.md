@@ -11,7 +11,7 @@
 BloodHorn is a modern bootloader built with a security + features + compact philosophy. We believe bootloaders should be secure without sacrificing usability, and feature-rich without being bloated. Built on EDK2 with optional Coreboot support, BloodHorn runs on pretty much anything with a CPU.
 
 ## Donate
-<button onclick="window.open('https://pay.oxapay.com/13185765', '_blank')" style="
+<button onclick="window.open('pay.oxapay.com/13185765', '_blank')" style="
   background: #f12a02ff;
   color: white;
   border: none;
