@@ -1,64 +1,63 @@
 /*
- * main.c 
+ * main.c
  *
- *
- * Welcome to the main entry point of BloodHorn, .
- * This file is where all the magic happens  we're talking about booting operating systems,
- * managing hardware, handling security, and making sure everything works smoothly whether
- * you're running on plain UEFI or the fancy Coreboot + UEFI hybrid setup.
+ * Main entry point and core orchestration for the BloodHorn bootloader.
  * 
- * the bootloader handles:
- * - os kernel loading (linux, multiboot1/2, limine, chainloading)
- * - hardware initialization through uefi or coreboot
- * - security features (tpm 2.0, secure boot, kernel verification)
- * - graphical boot menu with themes and mouse support
- * - network booting via pxe
- * - configuration through ini/json/uefi variables
+ * This file contains the primary boot logic that coordinates system initialization,
+ * hardware management, security features, and kernel loading. It supports both
+ * standard UEFI and hybrid Coreboot+UEFI environments.
  * 
- * supported architectures:
+ * Supported functionality:
+ * - OS kernel loading (Linux, Multiboot1/2, Limine, chainloading)
+ * - Hardware initialization via UEFI or Coreboot
+ * - Security features (TPM 2.0, Secure Boot, kernel verification)
+ * - Graphical boot menu with theme and mouse support
+ * - Network booting via PXE
+ * - Configuration through INI, JSON, and UEFI variables
+ * 
+ * Supported architectures:
  * - x86 (32/64-bit)
- * - arm64
- * - risc-v 64
- * - loongarch 64
+ * - ARM64
+ * - RISC-V 64-bit
+ * - LoongArch 64-bit
  * 
- * coreboot integration:
- * when coreboot firmware is detected, bloodhorn runs in hybrid mode.
- * coreboot handles low-level hardware init (graphics, storage, network, tpm)
- * while uefi provides boot services and compatibility.
+ * Coreboot integration:
+ * When Coreboot firmware is detected, BloodHorn operates in hybrid mode.
+ * Coreboot handles low-level hardware initialization (graphics, storage, network, TPM)
+ * while UEFI provides boot services and compatibility.
  * 
- * boot process:
- * 1. uefi entry point (UefiMain) - initialize system tables
- * 2. detect coreboot availability and set up hybrid mode if needed
- * 3. load configuration from ini/json/uefi variables
- * 4. initialize graphics, themes, fonts, and mouse
- * 5. show boot menu or autoboot based on timeout
- * 6. load and verify selected kernel
- * 7. exit uefi boot services and jump to kernel
+ * Boot process:
+ * 1. UEFI entry point (UefiMain) - initialize system tables
+ * 2. Detect Coreboot availability and configure hybrid mode if needed
+ * 3. Load configuration from INI/JSON/UEFI variables
+ * 4. Initialize graphics, themes, fonts, and mouse input
+ * 5. Display boot menu or initiate auto-boot based on timeout
+ * 6. Load and verify selected kernel
+ * 7. Exit UEFI boot services and jump to kernel
  * 
- * memory management:
- * the bootloader must carefully manage memory allocation during boot.
- * the ExitBootServicesAndExecuteKernel function handles the tricky transition
- * from uefi boot services to kernel control, retrying up to 8 times to handle
- * memory map changes that can occur between getmemorymap and exitbootservices calls.
+ * Memory management:
+ * The bootloader must carefully manage memory allocation during the boot process.
+ * The ExitBootServicesAndExecuteKernel function handles the critical transition
+ * from UEFI boot services to kernel control, retrying up to 8 times to
+ * handle memory map changes that occur between GetMemoryMap and ExitBootServices calls.
  * 
- * security:
- * - tpm 2.0 integration for hardware-rooted trust
- * - secure boot chain of trust verification
- * - sha-512 kernel hash verification
- * - encrypted configuration options
- * - constant-time comparisons and memory zeroization
+ * Security features:
+ * - TPM 2.0 integration for hardware-rooted trust
+ * - Secure Boot chain of trust verification
+ * - SHA-512 kernel hash verification
+ * - Encrypted configuration options
+ * - Constant-time comparisons and secure memory zeroization
  * 
- * this file is part of bloodhorn and is licensed under the bsd license.
- * see the root of the repository for license details.
+ * This file is part of BloodHorn and is licensed under the BSD license.
+ * See the root of the repository for license details.
  */
 
 // =============================================================================
-// INCLUDES - required headers and libraries
+// INCLUDES - Required headers and libraries
 // =============================================================================
 // 
-// these are all the headers we need for the bootloader functionality.
-// uefi headers provide the firmware interfaces, while the bloodhorn
-// modules provide our custom bootloader features.
+// UEFI headers provide firmware interfaces, while BloodHorn modules provide
+// custom bootloader functionality including boot menu, security, and filesystem support.
 
 #include <Uefi.h>
 #include "compat.h"                    // Compatibility layer for different platforms
@@ -78,11 +77,11 @@
 #include <Guid/FileInfo.h>             // File information GUID - for getting file stats
 
 // =============================================================================
-// BLOODHORN MODULES - internal bootloader components
+// BLOODHORN MODULES - Internal bootloader components
 // =============================================================================
 // 
-// these are the internal bloodhorn modules that provide the bootloader's
-// core functionality like the boot menu, security, filesystem support, etc.
+// Internal BloodHorn modules providing core bootloader functionality including
+// boot menu, security, filesystem support, and user interface components.
 
 #include "boot/menu.h"                // The graphical boot menu - user's gateway to choices
 #include "boot/theme.h"               // Theme system - because bootloaders should look good
@@ -99,11 +98,11 @@
 #include "net/pxe.h"                  // PXE network boot - boot from the network
 
 // =============================================================================
-// ARCHITECTURE SUPPORT - cpu architecture specific code
+// ARCHITECTURE SUPPORT - CPU architecture specific code
 // =============================================================================
 // 
-// each supported cpu architecture has its own boot protocol and requirements.
-// these headers contain the architecture-specific kernel loading code.
+// Each supported CPU architecture has specific boot protocol requirements.
+// These headers contain architecture-specific kernel loading implementations.
 
 #include "boot/Arch32/linux.h"        // Linux kernel boot (32-bit)
 #include "boot/Arch32/limine.h"       // Limine protocol support
@@ -118,11 +117,13 @@
 #include "boot/Arch32/BloodChain/bloodchain.h"  // Our own BloodChain boot protocol
 
 // =============================================================================
-// CONFIGURATION SYSTEMS - config file parsing
+// CONFIGURATION SYSTEMS - Configuration file parsing
 // =============================================================================
 // 
-// bloodhorn supports multiple configuration formats for different use cases.
-// ini for simplicity, json for structure, and uefi variables for enterprise.
+// BloodHorn supports multiple configuration formats for different use cases:
+// - INI for simplicity and readability
+// - JSON for structured configuration
+// - UEFI variables for enterprise deployments
 
 #include "config/config_ini.h"        // INI file configuration - simple and readable
 #include "config/config_json.h"       // JSON configuration - structured and modern
@@ -131,67 +132,66 @@
 #include "security/sha512.h"          // SHA-512 hashing - for kernel verification
 
 // =============================================================================
-// COREBOOT INTEGRATION - hybrid firmware support
+// COREBOOT INTEGRATION - Hybrid firmware support
 // =============================================================================
 // 
-// coreboot is an open-source firmware that can work alongside uefi.
-// when both are available, we get better hardware support and boot times.
+// Coreboot is an open-source firmware that can work alongside UEFI.
+// When both are available, we achieve better hardware support and boot times.
 
 #include "coreboot/coreboot_platform.h"  // Coreboot platform integration
 
 // =============================================================================
-// GLOBAL STATE - runtime variables
+// GLOBAL STATE - Runtime variables
 // =============================================================================
 // 
-// these variables maintain the bootloader's state throughout execution.
-// each one tracks a specific piece of information we need to keep handy.
+// Global variables maintaining bootloader state throughout execution.
+// Each variable tracks specific information required during the boot process.
 
-// File hash verification structure - for security checking
-// We store the expected SHA-512 hash of files we want to verify
+// File hash verification structure for security checking
+// Stores the expected SHA-512 hash of files to be verified
 typedef struct {
     char path[256];                    // File path (relative to boot device)
-    uint8_t expected_hash[64];         // SHA-512 hash we expect (64 bytes = 512 bits)
+    uint8_t expected_hash[64];         // SHA-512 hash (64 bytes = 512 bits)
 } FILE_HASH;
 
-// Global TPM 2.0 protocol handle - for hardware security operations
-// If TPM is available, this will point to the TPM protocol interface
+// Global TPM 2.0 protocol handle for hardware security operations
+// Points to the TPM protocol interface when TPM is available
 static EFI_TCG2_PROTOCOL* gTcg2Protocol = NULL;
 
-// Global BloodHorn context - our internal state management
-// This keeps track of all the BloodHorn library state and configuration
+// Global BloodHorn context for internal state management
+// Maintains all BloodHorn library state and configuration
 static bh_context_t* gBhContext = NULL;
 
-// Global image handle - super important for UEFI operations
-// We need this for ExitBootServices and loading child images
+// Global image handle required for UEFI operations
+// Essential for ExitBootServices and loading child images
 static EFI_HANDLE gImageHandle = NULL;
 
-// Global flag - is Coreboot available on this system?
-// This determines whether we run in hybrid mode or pure UEFI mode
+// Global flag indicating Coreboot availability
+// Determines whether to run in hybrid mode or pure UEFI mode
 STATIC BOOLEAN gCorebootAvailable = FALSE;
 
-// Global font handles - for rendering text in our GUI
-// We have separate fonts for regular text and headers
+// Global font handles for text rendering in the GUI
+// Separate fonts for regular text and headers
 static bh_font_t gDefaultFont = {0};    // Regular text font
 static bh_font_t gHeaderFont = {0};     // Header/title font
 
-// Global known hashes for kernel verification (if security is enabled)
+// Global array of known hashes for kernel verification (when security is enabled)
 STATIC FILE_HASH g_known_hashes[1] = {0};
 
 // Forward declaration for Coreboot main entry point
-// This is the entry point when running as a Coreboot payload
+// Entry point when running as a Coreboot payload
 extern VOID EFIAPI CorebootMain(VOID* coreboot_table, VOID* payload);
 
-// Global flag - are we running as a Coreboot payload?
-// This affects how we initialize and what services we use
+// Global flag indicating if running as a Coreboot payload
+// Affects initialization process and service selection
 STATIC BOOLEAN gRunningAsCorebootPayload = FALSE;
 
 // =============================================================================
 // BOOT CONFIGURATION STRUCTURE - bootloader settings
 // =============================================================================
 // 
-// this structure holds all the configuration options that control how bloodhorn
-// behaves. we populate it from ini files, json files, or uefi variables.
-
+// Boot configuration structure containing all bootloader settings
+// Populated from INI files, JSON files, or UEFI variables
 typedef struct {
     char default_entry[64];           // Which boot option to select by default
     int menu_timeout;                  // How long to wait before auto-booting (seconds)
@@ -209,17 +209,17 @@ typedef struct {
 } BOOT_CONFIG;
 
 // =============================================================================
-// COREBOOT BOOT PARAMETERS - kernel boot information
+// COREBOOT BOOT PARAMETERS - Kernel boot information
 // =============================================================================
 // 
-// when we boot a kernel, we need to pass it information about the system.
-// this structure contains all the details the kernel needs to take over properly.
+// Structure containing all details the kernel needs for proper system takeover.
+// Includes memory layout, framebuffer information, and boot parameters.
 
-// Coreboot boot signature and version - for kernel identification
-#define COREBOOT_BOOT_SIGNATURE 0x12345678  // Magic number to identify our boot params
-#define COREBOOT_BOOT_FLAG_KERNEL 0x01       // We're booting a kernel
-#define COREBOOT_BOOT_FLAG_FRAMEBUFFER 0x02  // We have framebuffer info
-#define COREBOOT_BOOT_FLAG_INITRD 0x04       // We have an initrd loaded
+// Coreboot boot signature and version for kernel identification
+#define COREBOOT_BOOT_SIGNATURE 0x12345678  // Magic number identifying boot params
+#define COREBOOT_BOOT_FLAG_KERNEL 0x01       // Indicates kernel boot
+#define COREBOOT_BOOT_FLAG_FRAMEBUFFER 0x02  // Indicates framebuffer info present
+#define COREBOOT_BOOT_FLAG_INITRD 0x04       // Indicates initrd loaded
 
 typedef struct {
     UINT32 signature;                   // Boot signature - must be COREBOOT_BOOT_SIGNATURE
@@ -228,32 +228,31 @@ typedef struct {
     UINT64 kernel_size;                 // Size of kernel in bytes
     UINT32 boot_flags;                  // Combination of COREBOOT_BOOT_FLAG_* flags
 
-    // Framebuffer information - for graphics setup in the kernel
+// Framebuffer information for kernel graphics setup
     UINT64 framebuffer_addr;            // Physical address of framebuffer memory
     UINT32 framebuffer_width;           // Width in pixels
     UINT32 framebuffer_height;          // Height in pixels
-    UINT32 framebuffer_bpp;             // Bits per pixel (usually 32)
+    UINT32 framebuffer_bpp;             // Bits per pixel (typically 32)
     UINT32 framebuffer_pitch;            // Bytes per line (width * bytes_per_pixel)
 
-    // Memory information - helps kernel know what RAM is available
+    // Memory information for kernel resource management
     UINT64 memory_size;                 // Total system memory size in bytes
 
-    // Initrd information - initial RAM disk for early boot setup
+    // Initrd information for early boot environment setup
     UINT64 initrd_addr;                 // Physical address where initrd is loaded
     UINT64 initrd_size;                 // Size of initrd in bytes
 
-    // Command line - parameters to pass to the kernel
-    // This is how you tell the kernel what root filesystem to use, 
-    // what drivers to load, debug options, etc.
+    // Kernel command line parameters
+    // Specifies root filesystem, drivers to load, debug options, etc.
     CHAR8 cmdline[256];                 // Kernel command line (null-terminated ASCII)
 } COREBOOT_BOOT_PARAMS;
 
 // =============================================================================
-// BOOT WRAPPER DECLARATIONS - boot method functions
+// BOOT WRAPPER DECLARATIONS - Boot method functions
 // =============================================================================
 // 
-// these functions implement the different boot methods we support.
-// each one gets called when the user selects that option from the boot menu.
+// Function declarations for different boot methods supported by BloodHorn.
+// Each function is called when the user selects the corresponding boot option.
 
 EFI_STATUS EFIAPI BootBloodchainWrapper(VOID);      // Our own BloodChain protocol
 EFI_STATUS EFIAPI BootLinuxKernelWrapper(VOID);      // Standard Linux kernel boot
@@ -271,18 +270,17 @@ EFI_STATUS EFIAPI BootRiscv64Wrapper(VOID);           // RISC-V 64 kernels
 EFI_STATUS EFIAPI BootLoongarch64Wrapper(VOID);       // LoongArch 64 kernels
 
 // =============================================================================
-// CONFIGURATION PARSING HELPERS - config file utilities
+// CONFIGURATION PARSING HELPERS - Configuration file utilities
 // =============================================================================
 // 
-// these functions help parse configuration from different sources.
-// each one handles a specific format or parsing task.
+// Helper functions for parsing configuration from different sources.
+// Each function handles a specific format or parsing task.
 
 /**
  * Case-insensitive string comparison
  * 
- * Sometimes we need to compare strings without caring about case.
- * "Linux", "linux", and "LINUX" should all be the same to us.
- * This helper makes that happen.
+ * Compares two strings without regard to case. Useful for configuration
+ * parsing where "Linux", "linux", and "LINUX" should be equivalent.
  * 
  * @param a First string to compare
  * @param b Second string to compare
@@ -299,11 +297,11 @@ STATIC BOOLEAN str_ieq(const CHAR8* a, const CHAR8* b) {
 }
 
 // =============================================================================
-// FILE OPERATIONS - filesystem access functions
+// FILE OPERATIONS - Filesystem access functions
 // =============================================================================
 // 
-// the bootloader needs to read files like kernels, initrds, and config files.
-// these functions handle file operations using uefi protocols.
+// Functions for file operations using UEFI protocols.
+// The bootloader needs to read kernels, initrds, and configuration files.
 
 /**
  * Load a file from the filesystem into memory (no hash verification)
@@ -373,9 +371,9 @@ LoadFileRaw (
 /**
  * Parse a boolean value from an ASCII string
  * 
- * Configuration files can represent booleans in different ways.
- * This helper understands "true/1/yes" and "false/0/no" (case-insensitive).
- * If the value is unclear, we return the default.
+ * Parses boolean values from configuration files, supporting multiple
+ * representations: "true/1/yes" and "false/0/no" (case-insensitive).
+ * Returns default value if parsing fails.
  * 
  * @param v String value to parse
  * @param defv Default value if parsing fails
@@ -391,9 +389,8 @@ STATIC BOOLEAN parse_bool_ascii(const CHAR8* v, BOOLEAN defv) {
 /**
  * Trim whitespace from an ASCII string
  * 
- * Configuration files often have extra whitespace that we need to clean up.
- * This function removes leading and trailing spaces, tabs, and line breaks.
- * We modify the string in-place to save memory.
+ * Removes leading and trailing whitespace (spaces, tabs, line breaks)
+ * from ASCII strings. Modifies the string in-place to conserve memory.
  * 
  * @param s String to trim (modified in-place)
  */
@@ -410,9 +407,8 @@ STATIC VOID trim_ascii(CHAR8* s) {
 /**
  * Read an entire file as ASCII text
  * 
- * This helper function reads a whole file into memory and ensures it's
- * null-terminated so we can treat it as a string. Perfect for reading
- * configuration files.
+ * Reads a complete file into memory and ensures null-termination
+ * for string operations. Ideal for reading configuration files.
  * 
  * @param root Root directory handle
  * @param path File path (UCS-2 string)
@@ -447,11 +443,11 @@ STATIC EFI_STATUS ReadWholeFileAscii(EFI_FILE_HANDLE root, CONST CHAR16* path, C
 }
 
 /**
- * Apply INI configuration to our boot config structure
+ * Apply INI configuration to boot configuration structure
  * 
- * INI files are simple and human-readable. We parse sections, keys,
- * and values to populate our configuration structure. This is a minimal
- * but functional INI parser that handles the basics we need.
+ * Parses INI file content and populates the configuration structure.
+ * This is a minimal but functional INI parser that handles sections,
+ * keys, and values required by BloodHorn.
  * 
  * @param ini INI file content as a string
  * @param config Configuration structure to populate
@@ -572,14 +568,16 @@ STATIC VOID ApplyUefiEnvOverrides(BOOT_CONFIG* config) {
 /**
  * Load boot configuration from files
  * 
- * loads configuration from bloodhorn.ini, bloodhorn.json, and uefi variables.
- * later sources override earlier ones.
-STATIC
-EFI_STATUS
-LoadBootConfig (
-  OUT BOOT_CONFIG* config
-  )
-{
+ * Loads configuration from multiple sources in priority order:
+ * 1. bloodhorn.ini (INI format)
+ * 2. bloodhorn.json (JSON format) 
+ * 3. UEFI environment variables
+ * Later sources override earlier ones.
+ * 
+ * @param config Output configuration structure
+ * @return EFI_SUCCESS if successful, error code otherwise
+ */
+ */
     // Defaults
     AsciiStrCpyS(config->default_entry, sizeof(config->default_entry), "linux");
     config->menu_timeout = 10;
@@ -627,17 +625,14 @@ LoadBootConfig (
 }
 
 /**
- * Initialize bloodhorn bootloader in hybrid mode
+ * Initialize BloodHorn bootloader in hybrid mode
  * 
- * detects coreboot firmware and initializes hybrid mode if available.
- * if coreboot is present, we use it for hardware initialization
- * and uefi for high-level services.
-STATIC
-EFI_STATUS
-InitializeBloodHorn (
-  VOID
-  )
-{
+ * Detects Coreboot firmware and initializes hybrid mode if available.
+ * When Coreboot is present, uses it for hardware initialization
+ * and UEFI for high-level services.
+ * 
+ * @return EFI_SUCCESS if successful, error code otherwise
+ */
     EFI_STATUS Status;
 
     // Check for Coreboot firmware and initialize if present
@@ -675,22 +670,23 @@ InitializeBloodHorn (
 }
 
 // =============================================================================
-// MAIN ENTRY POINT - where boot begins
+// MAIN ENTRY POINT - Boot process initialization
 // =============================================================================
 // 
-// this is the main function that gets called when bloodhorn starts.
-// we're running in uefi environment and need to set up everything
-// before loading and executing the chosen kernel.
+// Main function called by UEFI firmware when BloodHorn starts.
+// Orchestrates the entire boot process including system setup,
+// hardware detection, configuration loading, and kernel execution.
 
 /**
- * Main entry point for bloodhorn bootloader
+ * Main entry point for BloodHorn bootloader
  * 
- * this function is called by uefi firmware and orchestrates the entire boot process.
- * we set up the system, detect hardware, load configuration, and boot the kernel.
+ * Called by UEFI firmware to orchestrate the entire boot process.
+ * Sets up the system, detects hardware, loads configuration,
+ * and boots the selected kernel.
  * 
- * @param ImageHandle our efi image handle
- * @param SystemTable pointer to the uefi system table
- * @return efi_status success if we boot a kernel, error code otherwise
+ * @param ImageHandle EFI image handle for this bootloader
+ * @param SystemTable Pointer to UEFI system table
+ * @return EFI_SUCCESS if kernel boots successfully, error code otherwise
  */
 EFI_STATUS
 EFIAPI
@@ -703,18 +699,18 @@ UefiMain (
     EFI_LOADED_IMAGE_PROTOCOL *LoadedImage = NULL;
     EFI_GRAPHICS_OUTPUT_PROTOCOL *GraphicsOutput = NULL;
 
-    // First things first - set up our global pointers to UEFI services
-    // These are our lifelines to the UEFI firmware services
+    // Initialize UEFI system table pointers for firmware access
+    // These pointers provide access to essential UEFI services
     gST = SystemTable;                    // System table - console, runtime services
     gBS = SystemTable->BootServices;       // Boot services - memory, protocols, etc.
     gRT = SystemTable->RuntimeServices;    // Runtime services - after boot services exit
-    gImageHandle = ImageHandle;            // Save our image handle for later use
+    gImageHandle = ImageHandle;            // Save image handle for later operations
 
-    // Get information about our loaded image - we need this to find our device
+    // Retrieve loaded image protocol to locate our device
     Status = gBS->HandleProtocol(ImageHandle, &gEfiLoadedImageProtocolGuid, (VOID **)&LoadedImage);
     if (EFI_ERROR(Status)) return Status;
 
-    // Try to get the graphics output protocol - for our fancy GUI
+    // Locate graphics output protocol for GUI support
     Status = gBS->LocateProtocol(&gEfiGraphicsOutputProtocolGuid, NULL, (VOID **)&GraphicsOutput);
 
     // Set up the console - clear the screen and reset text output
@@ -908,7 +904,7 @@ static void bh_uefi_debug_break(void) {
 #if defined(__i386__) || defined(__x86_64__)
     __asm__ volatile("int $3");
 #else
-    /* On non-x86 platforms, there's no INT3; use a portable hang to aid debugging */
+    // On non-x86 platforms, there's no INT3; use a portable hang to aid debugging
     for (;;) { __asm__ volatile ("nop"); }
 #endif
 }
@@ -1113,20 +1109,20 @@ EFI_STATUS EFIAPI BootBloodchainWrapper(VOID) {
         }
 
         if (EFI_ERROR(EStatus)) {
-            /* Unexpected error; retry a couple times */
+        // Unexpected error; retry a couple times
             CpuPause();
             continue;
         }
 
-        /* Try to exit boot services; if it fails with EFI_INVALID_PARAMETER the map changed -> retry */
+        // Try to exit boot services; if it fails with EFI_INVALID_PARAMETER the map changed -> retry
         EStatus = gBS->ExitBootServices(gImageHandle, MapKey);
         if (EStatus == EFI_INVALID_PARAMETER) {
-            /* Map changed between GetMemoryMap and ExitBootServices; retry */
+            // Map changed between GetMemoryMap and ExitBootServices; retry
             CpuPause();
             continue;
         }
 
-        /* On success or other error, break and handle below */
+        // On success or other error, break and handle below
         break;
     }
 
@@ -1235,6 +1231,7 @@ STATIC EFI_STATUS LoadAndStartImageFromPath(EFI_HANDLE ParentImage, EFI_HANDLE D
  * 
  * loads a kernel file into memory and verifies its hash if security is enabled.
  * returns an error if the file doesn't exist or hash verification fails.
+ */
 STATIC
 EFI_STATUS
 LoadAndVerifyKernel (
@@ -1327,13 +1324,12 @@ LoadAndVerifyKernel (
  * 
  * sets up the execution environment and jumps to the kernel.
  * uses coreboot or uefi services depending on what's available.
-STATIC
-EFI_STATUS
-ExecuteKernel (
-  IN VOID* KernelBuffer,
-  IN UINTN KernelSize,
-  IN VOID* InitrdBuffer OPTIONAL
-  )
+ * 
+ * @param KernelBuffer Pointer to loaded kernel code
+ * @param KernelSize Size of kernel in bytes
+ * @param InitrdBuffer Optional pointer to initrd data
+ * @return EFI_SUCCESS if successful, error code otherwise
+ */
 {
     EFI_STATUS Status;
 
@@ -1351,12 +1347,6 @@ ExecuteKernel (
 
     return Status;
 }
-
-/**
- * Execute kernel using coreboot services
- * 
- * uses coreboot memory map and hardware initialization.
- * sets up boot parameters in coreboot format.
 STATIC
 EFI_STATUS
 ExecuteKernelWithCoreboot (
@@ -1444,9 +1434,9 @@ ExecuteKernelWithCoreboot (
         boot_params->boot_flags |= COREBOOT_BOOT_FLAG_INITRD;
     }
 
-    /* Ensure kernel is placed at chosen Coreboot region. The Coreboot memory map
-       provides physical addresses; copy the kernel buffer into the selected
-       kernel_base region so boot params and entry point are consistent. */
+    // Ensure kernel is placed at chosen Coreboot region. The Coreboot memory map
+    // provides physical addresses; copy the kernel buffer into the selected
+    // kernel_base region so boot params and entry point are consistent.
     if (KernelSize > largest_size) {
         Print(L"Kernel size %u exceeds selected Coreboot region of %u bytes\n", KernelSize, largest_size);
         return EFI_BAD_BUFFER_SIZE;
@@ -1454,7 +1444,7 @@ ExecuteKernelWithCoreboot (
 
     VOID* kernel_target = (VOID*)(UINTN)kernel_base;
     CopyMem(kernel_target, KernelBuffer, (UINTN)KernelSize);
-    /* Use the kernel target as the canonical kernel buffer/entry point from now on */
+    // Use the kernel target as the canonical kernel buffer/entry point from now on
     KernelBuffer = kernel_target;
 
     // Validate boot parameters structure
@@ -1478,8 +1468,14 @@ ExecuteKernelWithCoreboot (
 /**
  * Execute kernel using uefi services
  * 
- * uses uefi memory map and protocols.
- * sets up boot parameters for uefi environment.
+ * uses coreboot memory map and hardware initialization.
+ * Sets up boot parameters in coreboot format and copies kernel
+ * 
+ * @param KernelBuffer Pointer to loaded kernel code
+ * @param KernelSize Size of kernel in bytes
+ * @param InitrdBuffer Optional pointer to initrd data
+ * @return EFI_SUCCESS if successful, error code otherwise
+ */
 STATIC
 EFI_STATUS
 ExecuteKernelWithUefi (
@@ -1552,14 +1548,14 @@ ExecuteKernelWithUefi (
  * Exit boot services and execute kernel
  * 
  * this is the point of no return. we get the final memory map,
- * exit uefi boot services, and jump to the kernel entry point.
-STATIC
-EFI_STATUS
-ExitBootServicesAndExecuteKernel (
-  IN VOID* KernelBuffer,
-  IN UINTN KernelSize,
-  IN EFI_PHYSICAL_ADDRESS BootParamsAddr
-  )
+ * exit UEFI boot services, and jump to the kernel entry point.
+ * Handles concurrent memory map changes with retry logic.
+ * 
+ * @param KernelBuffer Pointer to loaded kernel code
+ * @param KernelSize Size of kernel in bytes
+ * @param BootParamsAddr Physical address of boot parameters structure
+ * @return EFI_SUCCESS if successful (kernel execution), error code otherwise
+ */
 {
     EFI_STATUS Status;
     UINTN MapSize = 0, MapKey = 0, DescSize = 0;
@@ -1587,12 +1583,12 @@ ExitBootServicesAndExecuteKernel (
 
         Status = gBS->ExitBootServices(gImageHandle, MapKey);
         if (Status == EFI_INVALID_PARAMETER) {
-            /* Map changed between GetMemoryMap and ExitBootServices; retry */
+            // Map changed between GetMemoryMap and ExitBootServices; retry
             CpuPause();
             continue;
         }
 
-        /* Either succeeded or failed with a different error */
+        // Either succeeded or failed with a different error
         break;
     }
 
@@ -1692,12 +1688,17 @@ ExitBootServicesAndExecuteKernel (
 /**
  * Validate boot parameters structure
  * 
- * checks that the boot parameters structure is valid
- * before we jump to the kernel. returns false if anything is wrong.
+ * Checks that the boot parameters structure is valid
+ * before we jump to the kernel. Returns false if anything is wrong.
+ * 
+ * @param boot_params Pointer to boot parameters structure to validate
+ * @return TRUE if valid, FALSE otherwise
+ */
 STATIC
 BOOLEAN
 ValidateBootParameters (
   IN COREBOOT_BOOT_PARAMS* boot_params
+  )
   )
 {
     if (!boot_params) {
@@ -1750,16 +1751,15 @@ ValidateBootParameters (
 }
 
 /**
- * Handle coreboot payload entry point
+ * Handle Coreboot payload entry point
  * 
- * checks if we're running as a coreboot payload and handles
+ * Checks if we're running as a Coreboot payload and handles
  * the special entry point requirements for that mode.
-STATIC
-EFI_STATUS
-HandleCorebootPayloadEntry (
-  IN EFI_HANDLE ImageHandle,
-  IN EFI_SYSTEM_TABLE *SystemTable
-  )
+ * 
+ * @param ImageHandle EFI image handle
+ * @param SystemTable Pointer to UEFI system table
+ * @return EFI_NOT_FOUND if not running as Coreboot payload, EFI_SUCCESS otherwise
+ */
 {
     // Check if we have Coreboot table available (indicates Coreboot payload)
     if (CorebootPlatformInit()) {
@@ -1782,13 +1782,12 @@ HandleCorebootPayloadEntry (
 /**
  * Get root directory handle for filesystem operations
  * 
- * returns a handle to the root directory of the filesystem
- * that contains the bootloader. used for reading config files and kernels.
-EFI_STATUS
-EFIAPI
-get_root_dir (
-  OUT EFI_FILE_HANDLE* root_dir
-  )
+ * Returns a handle to the root directory of the filesystem
+ * that contains the bootloader. Used for reading config files and kernels.
+ * 
+ * @param root_dir Output pointer for root directory handle
+ * @return EFI_SUCCESS if successful, error code otherwise
+ */
 {
     EFI_STATUS Status;
     EFI_SIMPLE_FILE_SYSTEM_PROTOCOL* Fs = NULL;
