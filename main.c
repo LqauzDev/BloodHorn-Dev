@@ -96,6 +96,7 @@
 #include "recovery/shell.h"            // Recovery shell - when things go wrong
 #include "plugins/plugin.h"            // Plugin system - extensibility
 #include "net/pxe.h"                  // PXE network boot - boot from the network
+#include "boot/BootManagerProtocol/BootManagerProtocol.h"  // Boot Manager Protocol
 
 // =============================================================================
 // ARCHITECTURE SUPPORT - CPU architecture specific code
@@ -726,6 +727,13 @@ UefiMain (
         return Status;
     }
 
+    // Install Boot Manager Protocol for advanced boot management
+    BOOT_MANAGER_PROTOCOL* BootManager = NULL;
+    Status = InstallBootManagerProtocol(gImageHandle, &BootManager);
+    if (!EFI_ERROR(Status)) {
+        Print(L"Boot Manager Protocol installed successfully\n");
+    }
+
     // Initialize BloodHorn library with UEFI system table integration.
     // Memory-map access goes through a Rust-based shim to avoid unsafe
     // casting between incompatible function pointer types.
@@ -770,14 +778,12 @@ UefiMain (
     } else {
         Print(L"BloodHorn library initialized successfully\n");
 
-        uint32_t major, minor, patch;
-        bh_get_version(&major, &minor, &patch);
-        Print(L"BloodHorn Library v%d.%d.%d\n", major, minor, patch);
-    }
-
-    // Load configuration (INI -> JSON -> UEFI vars)
     BOOT_CONFIG config;
-    LoadBootConfig(&config);
+    Status = LoadBootConfig(&config);
+    if (EFI_ERROR(Status)) {
+        Print(L"Failed to load boot configuration: %r\n", Status);
+        return Status;
+    }
 
     // Apply language and font from configuration before any UI
     SetLanguage(config.language);
@@ -788,8 +794,10 @@ UefiMain (
         }
     }
 
-    // Theme loading (language already applied from config)
+    // Theme loading and language setup (language already applied from config)
     LoadThemeAndLanguageFromConfig();
+
+    // Initialize mouse
     InitMouse();
 
     // Pre-menu autoboot based on configuration
@@ -799,40 +807,44 @@ UefiMain (
         INTN secs = config.menu_timeout;
         while (secs > 0) {
             Print(L"Auto-boot '%a' in %d seconds... Press any key to open menu.\r\n", config.default_entry, secs);
+            
             // Wait up to 1 second, polling key every 100ms
+            EFI_INPUT_KEY Key;
             BOOLEAN keyPressed = FALSE;
             for (int i = 0; i < 10; i++) {
-                EFI_INPUT_KEY Key;
-                if (!EFI_ERROR(gST->ConIn->ReadKeyStroke(gST->ConIn, &Key))) { keyPressed = TRUE; break; }
+                Status = gST->ConIn->ReadKeyStroke(gST->ConIn, &Key);
+                if (!EFI_ERROR(Status) && (Key.ScanCode != 0)) {
+                    keyPressed = TRUE;
+                    break;
+                }
                 gBS->Stall(100000); // 100ms
             }
+            
             if (keyPressed) { showMenu = TRUE; break; }
             secs--;
-            if (secs == 0) {
-                showMenu = FALSE;
-            }
         }
-    }
-
-    // If no key pressed within timeout, autoboot supported default
-    if (!showMenu) {
-        if (AsciiStrCmp(config.default_entry, "linux") == 0 && config.kernel[0] != 0) {
-            const char* k = config.kernel;
-            const char* i = (config.initrd[0] != 0) ? config.initrd : NULL;
-            const char* c = (config.cmdline[0] != 0) ? config.cmdline : "";
-            EFI_STATUS ls = linux_load_kernel(k, i, c);
-            if (!EFI_ERROR(ls)) {
-                return EFI_SUCCESS;
+        
+        if (!showMenu) {
+            // Auto-boot supported default entry
+            if (AsciiStrCmp(config.default_entry, "linux") == 0 && config.kernel[0] != 0) {
+                const char* k = config.kernel;
+                const char* i = (config.initrd[0] != 0) ? config.initrd : NULL;
+                const char* c = (config.cmdline[0] != 0) ? config.cmdline : "";
+                Status = linux_load_kernel(k, i, c);
+                if (!EFI_ERROR(Status)) {
+                    Status = ExecuteKernel(KernelBuffer, KernelSize, NULL);
+                }
             } else {
-                Print(L"Autoboot linux failed: %r\n", ls);
+                // Fallback to boot menu if default entry not supported
                 showMenu = TRUE;
             }
-        } else {
-            // Unsupported default entry fallback to menu
-            showMenu = TRUE;
         }
     }
 
+    // Show boot menu if needed
+    Status = showMenu ? ShowBootMenu() : EFI_NOT_READY;
+
+    // Add boot entries using Boot Manager Protocol
     AddBootEntry(L"BloodChain Boot Protocol", BootBloodchainWrapper);
     AddBootEntry(L"Linux Kernel", BootLinuxKernelWrapper);
     AddBootEntry(L"Multiboot2 Kernel", BootMultiboot2KernelWrapper);
@@ -946,6 +958,25 @@ EFI_STATUS EFIAPI BootPxeNetworkWrapper(VOID) {
     }
 
     return Status;
+}
+
+/**
+ * Show boot menu using Boot Manager Protocol
+ */
+STATIC EFI_STATUS ShowBootMenu(VOID) {
+    BOOT_MANAGER_ENTRY Entries[BOOT_MANAGER_MAX_ENTRIES];
+    UINTN EntryCount = 0;
+    EFI_STATUS Status;
+    
+    // Get boot entries from Boot Manager
+    Status = GetBootEntries(gBootManagerProtocol, Entries, &EntryCount);
+    if (EFI_ERROR(Status)) {
+        Print(L"Failed to get boot entries: %r\n", Status);
+        return Status;
+    }
+    
+    // Display boot menu using existing menu system
+    return ShowBootMenuWithEntries(Entries, EntryCount);
 }
 
 EFI_STATUS EFIAPI BootRecoveryShellWrapper(VOID) {
