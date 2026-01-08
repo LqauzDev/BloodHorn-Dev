@@ -133,16 +133,6 @@ sudo umount /mnt/efi
 
 See INSTALL.md for Windows installation, USB creation, PXE boot, and more options.
 
-## Project Structure
-
-- coreboot/ - Coreboot payload integration
-- uefi/ - UEFI-specific code
-- security/ - Crypto, TPM, secure boot implementation
-- fs/ - Filesystem support (FAT32 primarily)
-- net/ - Network boot capabilities
-- rust/ - Internal no_std crates for safe memory management
-- boot/ - Main bootloader logic and UI
-
 ## Configuration
 
 BloodHorn is configurable through multiple formats:
