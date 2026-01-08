@@ -8,7 +8,32 @@
 
 ## What is BloodHorn?
 
-BloodHorn is a modern bootloader built with a security + features + compact philosophy. We believe bootloaders should be secure without sacrificing usability, and feature-rich without being bloated. Built on EDK2 with optional Coreboot support, BloodHorn runs on pretty much anything with a CPU.
+BloodHorn is a modern bootloader built with a security-focused approach. It's designed to be both powerful and reliable, built on the EDK2 framework with optional Coreboot support. BloodHorn supports multiple architectures and firmware interfaces.
+
+## Quick Start
+
+1. **Prerequisites**:
+   - EDK2 development environment
+   - GCC cross-compiler for your target architecture
+   - Python 3.7 or later
+   - NASM
+
+2. **Build Instructions**:
+   ```bash
+   # Clone EDK2 and BloodHorn
+   git clone https://github.com/tianocore/edk2.git
+   cd edk2
+   git submodule update --init
+   
+   # Set up the build environment
+   . edksetup.sh
+   make -C BaseTools
+   
+   # Build BloodHorn
+   build -a X64 -p BloodHorn/BloodHorn.dsc -t GCC5
+   ```
+
+For detailed installation and configuration, see [INSTALL.md](INSTALL.md).
 
 ## Donate
 <button onclick="window.open('pay.oxapay.com/13185765', '_blank')" style="

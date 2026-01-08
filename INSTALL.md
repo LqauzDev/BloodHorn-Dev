@@ -1,58 +1,75 @@
 # BloodHorn Installation Guide
 
-This guide explains how to install BloodHorn bootloader on different systems and platforms.
+This guide explains how to set up the development environment and build BloodHorn bootloader.
 
 ## Table of Contents
 
 1. [Prerequisites](#prerequisites)
-2. [Building BloodHorn](#building-bloodhorn)
-3. [UEFI Installation](#uefi-installation)
-4. [BIOS Installation](#bios-installation)
-5. [USB Installation](#usb-installation)
-6. [Network Installation](#network-installation)
-7. [Platform-Specific Installation](#platform-specific-installation)
-8. [Troubleshooting](#troubleshooting)
+2. [Setting Up EDK2](#setting-up-edk2)
+3. [Building BloodHorn](#building-bloodhorn)
+4. [Installation](#installation)
+5. [Troubleshooting](#troubleshooting)
 
 ## Prerequisites
 
 ### Required Software
 
+#### Linux (Ubuntu/Debian)
 ```bash
-# Ubuntu/Debian
 sudo apt update
-sudo apt install build-essential nasm gcc-multilib gcc-mingw-w64 \
-    genisoimage qemu-system-x86 ovmf mtools
-
-# CentOS/RHEL/Fedora
-sudo dnf groupinstall "Development Tools"
-sudo dnf install nasm mingw64-gcc genisoimage qemu ovmf mtools
-
-# Arch Linux
-sudo pacman -S base-devel nasm mingw-w64-gcc cdrtools qemu ovmf mtools
-
-# macOS
-brew install gcc nasm qemu mtools
+sudo apt install -y build-essential nasm python3 python3-pip \
+    uuid-dev iasl acpica-tools gcc-aarch64-linux-gnu \
+    qemu-system-x86 ovmf mtools
 ```
 
-### Hardware Requirements
+#### Windows
+1. Install Visual Studio 2022 with:
+   - Desktop development with C++
+   - Windows 10/11 SDK
+   - MSVC v143 - VS 2022 C++ x64/x86 build tools
+2. Install Python 3.7+ from [python.org](https://www.python.org/)
+3. Install [NASM](https://www.nasm.us/)
+4. Install [Git for Windows](https://git-scm.com/download/win)
 
-- **CPU**: x86_64 compatible processor
-- **Memory**: 512MB RAM minimum, 2GB recommended
-- **Storage**: 100MB free space for installation
-- **Boot Method**: UEFI or BIOS support
+#### macOS
+```bash
+brew install python nasm qemu mtools
+xcode-select --install
+```
+
+## Setting Up EDK2
+
+1. Clone EDK2 and BloodHorn:
+   ```bash
+   # Clone EDK2
+   git clone https://github.com/tianocore/edk2.git
+   cd edk2
+   git submodule update --init
+   
+   # Clone BloodHorn into edk2 directory
+   git clone https://github.com/Listedroot/BloodHorn.git BloodHorn
+   ```
+
+2. Set up the build environment:
+   - **Linux/macOS**:
+     ```bash
+     . edksetup.sh
+     make -C BaseTools
+     ```
+   - **Windows**:
+     ```
+     edksetup.bat
+     ```
 
 ## Building BloodHorn
 
-### Clone and Build
-
+### For x86_64 (UEFI):
 ```bash
-# Clone repository
-git clone https://github.com/Listedroot/BloodHorn.git
-cd BloodHorn
+# Set up environment variables
+export EDK_TOOLS_PATH=$PWD/BaseTools
 
-# Install dependencies (Ubuntu/Debian example)
-sudo apt update
-sudo apt install -y build-essential uuid-dev nasm acpica-tools \
+# Build
+build -a X64 -p BloodHorn/BloodHorn.dsc -t GCC5
     python3-full qemu-system-x86 ovmf git gcc-aarch64-linux-gnu \
     gcc-riscv64-linux-gnu
 

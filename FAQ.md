@@ -1,27 +1,47 @@
 # Frequently Asked Questions
 
-### Why does BloodHorn have so many features? Isn't that bloated?
+### What are the system requirements for BloodHorn?
 
-BloodHorn follows a security + features + compact philosophy. Unlike minimalist bootloaders, we believe that modern systems need comprehensive security features, user-friendly interfaces, and enterprise integration capabilities.
+**Minimum Requirements:**
+- **CPU**: x86_64, AArch64 (ARM64), or RISC-V 64-bit
+- **RAM**: 128MB minimum, 1GB recommended
+- **Storage**: 32MB free space for installation
+- **Firmware**: UEFI 2.8+ or BIOS with CSM
+- **Build System**:
+  - GCC or Clang toolchain
+  - Python 3.7+
+  - EDK2 development environment
+  - NASM assembler
 
-Our feature set is carefully curated:
-- Security: TPM 2.0, comprehensive crypto, secure boot, kernel verification
-- Usability: Graphical themes, mouse support, multi-language, recovery shell
-- Enterprise: EDK2 integration, multiple config formats, broad architecture support
+### Why is EDK2 required for building BloodHorn?
 
-We maintain compactness through efficient EDK2-based architecture and modular design, not by removing essential functionality.
+BloodHorn is built on top of the EDK2 framework because it provides:
 
-### What about LUKS? What about security? Encrypt the kernel!
+1. **Hardware Abstraction**: Consistent interface across different system architectures
+2. **Security Features**: Built-in support for Secure Boot, TPM, and cryptographic operations
+3. **Reliability**: Industry-standard framework used in production environments
+4. **Maintainability**: Well-documented codebase with active development
 
-BloodHorn provides multiple layers of security that make kernel encryption unnecessary:
+### What about security features?
 
-1. SHA-512 kernel hash verification - Ensures kernel integrity
-2. TPM 2.0 integration - Hardware-rooted trust chains
-3. Secure Boot support - Cryptographic verification of all components
-4. Encrypted configuration options - Protect sensitive settings
-5. Constant-time operations - Prevent timing attacks
+BloodHorn implements several security measures:
 
-Putting the kernel/modules on a FAT32 partition with SHA-512 verification provides equivalent security to full disk encryption for boot purposes, while maintaining compatibility and performance.
+1. **Secure Boot**: Verifies cryptographic signatures of all components
+2. **TPM 2.0**: For hardware-based security operations and attestation
+3. **Kernel Verification**: Optional hash checking of loaded kernels
+4. **Memory Protection**: W^X (Write XOR Execute) memory permissions
+5. **ASLR**: Address Space Layout Randomization for runtime protection
+
+### How does BloodHorn handle disk encryption?
+
+BloodHorn supports booting from encrypted volumes through:
+
+1. **LUKS Integration**: Can unlock LUKS-encrypted root partitions
+2. **TPM 2.0**: Supports sealing encryption keys to TPM
+3. **Secure Boot**: Ensures the bootloader itself hasn't been tampered with
+4. **Kernel Command-line**: Can pass encryption parameters to the Linux kernel
+
+For full-disk encryption, we recommend using LUKS2 with TPM 2.0 integration for the best balance of security and usability.
 
 ### What if a malicious actor modifies the config file?
 
@@ -35,17 +55,25 @@ BloodHorn provides several protection mechanisms:
 
 For enterprise deployments, we recommend using UEFI variable configuration combined with Secure Boot for maximum protection.
 
-### Why use EDK2 instead of a standalone approach?
+### What architectures are supported?
 
-EDK2 provides several advantages for a security-focused bootloader:
+Currently supported architectures:
 
-1. Proven firmware framework - Battle-tested in enterprise environments
-2. Comprehensive hardware support - Wide device compatibility out-of-the-box
-3. Security features - Built-in Secure Boot, TPM integration, memory protection
-4. Enterprise integration - Standard firmware interface for IT infrastructure
-5. Maintainability - Industry-standard codebase with regular security updates
+1. **x86_64**: Standard 64-bit x86 systems (most modern PCs)
+2. **AArch64 (ARM64)**: ARM-based servers and single-board computers
+3. **RISC-V 64**: Emerging RISC-V platforms
 
-This allows BloodHorn to focus on bootloader-specific innovations while leveraging EDK2's robust foundation.
+Planned support:
+- LoongArch 64-bit
+- x86 (32-bit) legacy systems
+
+### How do I report security vulnerabilities?
+
+Please report security issues responsibly to:
+- Email: security@bloodyhell.industries
+- PGP Key: [Available on our website]
+
+We appreciate responsible disclosure and will acknowledge all valid reports.
 
 ### Why support so many architectures?
 

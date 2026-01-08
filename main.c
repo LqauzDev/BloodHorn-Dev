@@ -96,6 +96,7 @@
 #include "recovery/shell.h"            // Recovery shell - when things go wrong
 #include "plugins/plugin.h"            // Plugin system - extensibility
 #include "net/pxe.h"                  // PXE network boot - boot from the network
+#include "boot/Arch32/powerpc.h"     // PowerPC architecture support
 #include "boot/BootManagerProtocol/BootManagerProtocol.h"  // Boot Manager Protocol
 
 // =============================================================================
@@ -719,9 +720,39 @@ UefiMain (
     gST->ConOut->SetMode(gST->ConOut, 0);
     gST->ConOut->ClearScreen(gST->ConOut);
 
-    // Initialize BloodHorn in hybrid mode (detect Coreboot, set up hardware)
-    // This is where we figure out if we're running with Coreboot or pure UEFI
-    Status = InitializeBloodHorn();
+    // Detect and initialize PowerPC architecture if needed
+    uint32_t pvr = mfspr(SPR_PVR);
+    uint32_t platform_id = pvr >> 16;
+    
+    if (platform_id == 0x0039 || platform_id == 0x0040 || platform_id == 0x004A) {
+        // Initialize PowerPC platform
+        ppc_early_init();
+        
+        // Set up UART for early debugging
+        volatile uint32_t *uart = (volatile uint32_t *)0x800001F8;  // Default UART
+        if (platform_id == 0x0039) uart = (volatile uint32_t *)0xEF600300;  // PPC440
+        else if (platform_id == 0x0040) uart = (volatile uint32_t *)0xEF600300;  // PPC405
+        else if (platform_id == 0x004A) uart = (volatile uint32_t *)0x4EF600300;  // PPC460
+        
+        // Initialize UART
+        *uart = 0x80;           // Enable DLAB
+        *uart = 1;              // Divisor LSB (115200 baud)
+        *(uart + 1) = 0;        // Divisor MSB
+        *uart = 0x03;           // 8N1
+        *(uart + 3) = 0x03;     // Enable FIFO, clear them
+        
+        Print(L"PowerPC platform detected (PVR: 0x%08x)\n", pvr);
+    }
+
+    // Skip standard initialization on PowerPC (we handle it differently)
+    if (platform_id != 0x0039 && platform_id != 0x0040 && platform_id != 0x004A) {
+        // Initialize BloodHorn in hybrid mode (detect Coreboot, set up hardware)
+        // This is where we figure out if we're running with Coreboot or pure UEFI
+        Status = InitializeBloodHorn();
+    } else {
+        // For PowerPC, we've already done early init
+        Status = EFI_SUCCESS;
+    }
     if (EFI_ERROR(Status)) {
         Print(L"Failed to initialize BloodHorn: %r\n", Status);
         return Status;
