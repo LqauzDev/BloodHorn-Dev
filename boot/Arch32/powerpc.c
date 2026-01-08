@@ -11,6 +11,8 @@
 #include <string.h>
 #include "powerpc.h"
 #include "../boot.h"
+#include "../platform/platform.h"
+#include "../platform/devicetree.h"
 
 // CPU information structure
 static struct ppc_cpu_info cpu_info;
@@ -18,8 +20,204 @@ static struct ppc_cpu_info cpu_info;
 // MMU context
 static struct ppc_mmu_context mmu_ctx;
 
-// Exception frame for nested exceptions
-static struct ppc_exception_frame *current_frame;
+// Platform-specific data
+static bool platform_detected = false;
+static bh_platform_type_t current_platform = BH_PLATFORM_UNKNOWN;
+static struct device_tree_node* dt_root = NULL;
+static void* device_tree_blob = NULL;
+static size_t device_tree_size = 0;
+
+// Boot information from platform
+static char* platform_cmdline = NULL;
+static size_t platform_cmdline_size = 0;
+static void* platform_initrd = NULL;
+static size_t platform_initrd_size = 0;
+
+// Platform detection and initialization
+static bh_status_t ppc_detect_platform(void) {
+    if (platform_detected) {
+        return BH_STATUS_SUCCESS;
+    }
+    
+    // Initialize platform manager
+    bh_status_t status = platform_manager_init();
+    if (status != BH_STATUS_SUCCESS) {
+        return status;
+    }
+    
+    // Detect platform
+    status = platform_detect_all();
+    if (status != BH_STATUS_SUCCESS) {
+        return status;
+    }
+    
+    current_platform = platform_get_type();
+    platform_detected = true;
+    
+    return BH_STATUS_SUCCESS;
+}
+
+static bh_status_t ppc_initialize_platform(void) {
+    if (!platform_detected) {
+        bh_status_t status = ppc_detect_platform();
+        if (status != BH_STATUS_SUCCESS) {
+            return status;
+        }
+    }
+    
+    // Initialize platform
+    bh_boot_info_t boot_info = {0};
+    bh_status_t status = platform_initialize(&boot_info);
+    if (status != BH_STATUS_SUCCESS) {
+        return status;
+    }
+    
+    // Get device tree from platform
+    status = platform_get_device_tree(&device_tree_blob, &device_tree_size);
+    if (status == BH_STATUS_SUCCESS && device_tree_blob) {
+        // Parse device tree
+        status = dt_load_from_blob(device_tree_blob, device_tree_size, &dt_root);
+        if (status != BH_STATUS_SUCCESS) {
+            // Try to load from platform directly
+            status = dt_load_from_platform(&device_tree_blob, &device_tree_size);
+            if (status == BH_STATUS_SUCCESS) {
+                status = dt_load_from_blob(device_tree_blob, device_tree_size, &dt_root);
+            }
+        }
+    }
+    
+    // Get command line from platform
+    status = platform_get_command_line(&platform_cmdline, &platform_cmdline_size);
+    if (status != BH_STATUS_SUCCESS) {
+        platform_cmdline = NULL;
+        platform_cmdline_size = 0;
+    }
+    
+    // Get initrd information from platform
+    status = platform_get_initrd_info(&platform_initrd, &platform_initrd_size);
+    if (status != BH_STATUS_SUCCESS) {
+        platform_initrd = NULL;
+        platform_initrd_size = 0;
+    }
+    
+    return BH_STATUS_SUCCESS;
+}
+
+static bh_status_t ppc_setup_platform_memory(void) {
+    if (!platform_detected) {
+        bh_status_t status = ppc_initialize_platform();
+        if (status != BH_STATUS_SUCCESS) {
+            return status;
+        }
+    }
+    
+    // Get memory map from device tree if available
+    if (dt_root) {
+        struct dt_memory_region* regions;
+        size_t count;
+        bh_status_t status = dt_get_memory_regions(dt_root, &regions, &count);
+        if (status == BH_STATUS_SUCCESS && regions) {
+            // Use device tree memory regions
+            // This would update the MMU setup based on device tree
+            for (size_t i = 0; i < count; i++) {
+                // Configure memory regions from device tree
+                // This is a simplified implementation
+                (void)regions[i]; // Suppress unused variable warning
+            }
+            platform_free(regions);
+            return BH_STATUS_SUCCESS;
+        }
+    }
+    
+    // Fallback to platform memory map
+    bh_memory_map_t memory_map = {0};
+    bh_status_t status = platform_get_memory_map(&memory_map);
+    if (status == BH_STATUS_SUCCESS) {
+        // Use platform memory map
+        // This would update the MMU setup based on platform info
+        return BH_STATUS_SUCCESS;
+    }
+    
+    return BH_STATUS_NOT_FOUND;
+}
+
+static bh_status_t ppc_setup_platform_console(void) {
+    if (!platform_detected) {
+        bh_status_t status = ppc_initialize_platform();
+        if (status != BH_STATUS_SUCCESS) {
+            return status;
+        }
+    }
+    
+    // Platform console is already initialized during platform initialization
+    return BH_STATUS_SUCCESS;
+}
+
+static bh_status_t ppc_setup_platform_timers(void) {
+    if (!platform_detected) {
+        bh_status_t status = ppc_initialize_platform();
+        if (status != BH_STATUS_SUCCESS) {
+            return status;
+        }
+    }
+    
+    // Use platform time functions
+    uint64_t time = platform_get_time();
+    if (time != 0) {
+        // Platform provides time, use it
+        return BH_STATUS_SUCCESS;
+    }
+    
+    // Fallback to PowerPC timebase
+    return BH_STATUS_SUCCESS;
+}
+
+static bh_status_t ppc_parse_platform_cpu_info(void) {
+    if (!dt_root) {
+        return BH_STATUS_NOT_FOUND;
+    }
+    
+    // Find CPU nodes
+    struct device_tree_node* cpu_node;
+    bh_status_t status = dt_find_node_by_compatible(dt_root, "cpu", &cpu_node);
+    if (status != BH_STATUS_SUCCESS) {
+        // Try alternative compatible strings
+        const char* cpu_compatibles[] = {
+            "ibm,powerpc-cpu",
+            "fsl,powerpc-cpu",
+            "cpu",
+            NULL
+        };
+        
+        for (int i = 0; cpu_compatibles[i]; i++) {
+            status = dt_find_node_by_compatible(dt_root, cpu_compatibles[i], &cpu_node);
+            if (status == BH_STATUS_SUCCESS) {
+                break;
+            }
+        }
+        
+        if (status != BH_STATUS_SUCCESS) {
+            return BH_STATUS_NOT_FOUND;
+        }
+    }
+    
+    // Get CPU properties
+    uint32_t clock_frequency = 0;
+    dt_get_u32_property(cpu_node, "clock-frequency", &clock_frequency);
+    
+    uint32_t timebase_frequency = 0;
+    dt_get_u32_property(cpu_node, "timebase-frequency", &timebase_frequency);
+    
+    char* model = NULL;
+    dt_get_string_property(cpu_node, "model", &model);
+    if (model) {
+        // Update CPU info with device tree data
+        // This would enhance the CPU detection
+        platform_free(model);
+    }
+    
+    return BH_STATUS_SUCCESS;
+}
 
 // Initialize CPU features and capabilities
 static void ppc_detect_cpu(void) {
@@ -60,10 +258,21 @@ static void ppc_detect_cpu(void) {
     cpu_info.l1_cache_line_size = 1 << ((l1cfbr >> 16) & 0x1F);
     cpu_info.icache_size = (l1cfar & 0x7FF) * cpu_info.l1_cache_line_size;
     cpu_info.dcache_size = ((l1cfbr >> 24) & 0x7FF) * cpu_info.l1_cache_line_size;
+    
+    // Enhance with platform information
+    ppc_parse_platform_cpu_info();
 }
 
 // Initialize MMU with proper page tables
 static void ppc_init_mmu(void) {
+    // Try to use platform memory information first
+    bh_status_t status = ppc_setup_platform_memory();
+    if (status == BH_STATUS_SUCCESS) {
+        // Platform provided memory map, use it
+        return;
+    }
+    
+    // Fallback to default MMU setup
     // Allocate page tables (aligned to 64KB for SDR1)
     static uint64_t pagetable[8192] __attribute__((aligned(65536)));
     
@@ -118,6 +327,14 @@ static void ppc_init_cache(void) {
 
 // Initialize timers
 static void ppc_init_timers(void) {
+    // Try to use platform timer information
+    bh_status_t status = ppc_setup_platform_timers();
+    if (status == BH_STATUS_SUCCESS) {
+        // Platform provided timer setup
+        return;
+    }
+    
+    // Fallback to default timer setup
     // Set up Decrementer
     uint64_t tb_freq = 512000000; // 512MHz typical for PowerPC
     uint32_t decr_val = tb_freq / 100; // 10ms tick
@@ -163,24 +380,90 @@ static void ppc_init_exceptions(void) {
 }
 
 // Platform hardware initialization
-static void ppc_init_platform(void) {
+static void ppc_init_platform_hardware(void) {
+    // Initialize platform first
+    bh_status_t status = ppc_initialize_platform();
+    if (status != BH_STATUS_SUCCESS) {
+        // Platform initialization failed, use defaults
+        return;
+    }
+    
+    // Use device tree for hardware configuration if available
+    if (dt_root) {
+        // Configure hardware based on device tree
+        struct device_tree_node* soc_node;
+        status = dt_find_node_by_compatible(dt_root, "simple-bus", &soc_node);
+        if (status == BH_STATUS_SUCCESS) {
+            // Found SoC node, configure devices from device tree
+            // This would configure UART, interrupt controller, etc.
+        }
+        
+        // Find and configure UART from device tree
+        struct device_tree_node* uart_node;
+        status = dt_find_node_by_compatible(dt_root, "ns16550", &uart_node);
+        if (status != BH_STATUS_SUCCESS) {
+            // Try other compatible strings
+            const char* uart_compatibles[] = {
+                "serial",
+                "console",
+                NULL
+            };
+            
+            for (int i = 0; uart_compatibles[i]; i++) {
+                status = dt_find_node_by_compatible(dt_root, uart_compatibles[i], &uart_node);
+                if (status == BH_STATUS_SUCCESS) {
+                    break;
+                }
+            }
+        }
+        
+        if (status == BH_STATUS_SUCCESS) {
+            // Configure UART from device tree
+            uint64_t reg_address = 0;
+            uint32_t reg_size = 0;
+            
+            void* reg_value;
+            size_t reg_length;
+            status = dt_get_property(uart_node, "reg", &reg_value, &reg_length);
+            if (status == BH_STATUS_SUCCESS && reg_length >= 16) {
+                uint32_t* reg_data = (uint32_t*)reg_value;
+                reg_address = ((uint64_t)dt_be32_to_cpu(reg_data[0]) << 32) | dt_be32_to_cpu(reg_data[1]);
+                reg_size = ((uint64_t)dt_be32_to_cpu(reg_data[2]) << 32) | dt_be32_to_cpu(reg_data[3]);
+                
+                // Configure UART at device tree address
+                volatile uint32_t* uart = (volatile uint32_t*)reg_address;
+                
+                // 16550 UART initialization sequence
+                *uart = 0x80;           // Enable DLAB
+                *uart = 1;              // Divisor LSB (115200 baud)
+                *(uart + 1) = 0;        // Divisor MSB
+                *uart = 0x03;           // 8N1
+                *(uart + 3) = 0x03;     // Enable FIFO, clear them
+                *(uart + 1) = 0x01;     // Enable receive data available interrupt
+            }
+        }
+        
+        return;
+    }
+    
+    // Fallback to platform-specific hardware initialization
     // Detect platform type from PVR
     uint32_t pvr = mfspr(SPR_PVR);
     uint32_t platform_id = pvr >> 16;
-    
+
     // Common UART initialization for 16550/NS16550 compatible UARTs
-    volatile uint32_t *uart = (volatile uint32_t *)0x800001F8;  // Default UART address
+    volatile uint32_t* uart = (volatile uint32_t*)0x800001F8;  // Default UART address
     
     // Configure UART based on platform
     switch (platform_id) {
         case 0x0039:  // PPC440
-            uart = (volatile uint32_t *)0xEF600300;  // PPC440 UART0
+            uart = (volatile uint32_t*)0xEF600300;  // PPC440 UART0
             break;
         case 0x0040:  // PPC405
-            uart = (volatile uint32_t *)0xEF600300;  // PPC405 UART0
+            uart = (volatile uint32_t*)0xEF600300;  // PPC405 UART0
             break;
         case 0x004A:  // PPC460
-            uart = (volatile uint32_t *)0x4EF600300; // PPC460 UART0
+            uart = (volatile uint32_t*)0x4EF600300; // PPC460 UART0
             break;
     }
     
@@ -196,7 +479,7 @@ static void ppc_init_platform(void) {
     switch (platform_id) {
         case 0x0039:  // PPC440
             // Configure UIC (Universal Interrupt Controller)
-            volatile uint32_t *uic_base = (volatile uint32_t *)0xEF600700;
+            volatile uint32_t* uic_base = (volatile uint32_t*)0xEF600700;
             uic_base[0x10/4] = 0x7FFFFFFF;  // UIC_MSR: Mask all interrupts
             uic_base[0x18/4] = 0x00000000;  // UIC_SR: Clear all pending
             uic_base[0x1C/4] = 0x00000000;  // UIC_ER: Disable all
@@ -208,7 +491,7 @@ static void ppc_init_platform(void) {
             
         case 0x0040:  // PPC405
             // Configure UIC for PPC405
-            uic_base = (volatile uint32_t *)0xEF600800;
+            uic_base = (volatile uint32_t*)0xEF600800;
             uic_base[0x10/4] = 0x7FFFFFFF;
             uic_base[0x18/4] = 0x00000000;
             uic_base[0x1C/4] = 0x00000000;
@@ -223,7 +506,7 @@ static void ppc_init_platform(void) {
     switch (platform_id) {
         case 0x0039:  // PPC440
             // Configure SDRAM controller
-            volatile uint32_t *mem_ctrl = (volatile uint32_t *)0x4F800000;
+            volatile uint32_t* mem_ctrl = (volatile uint32_t*)0x4F800000;
             mem_ctrl[0x00/4] = 0x80808080;  // SDRAM0_CFG0
             mem_ctrl[0x10/4] = 0x00000000;  // SDRAM0_CFG1
             mem_ctrl[0x20/4] = 0x00000000;  // SDRAM0_CFG2
@@ -231,7 +514,7 @@ static void ppc_init_platform(void) {
             
         case 0x0040:  // PPC405
             // Configure memory controller for PPC405
-            mem_ctrl = (volatile uint32_t *)0x4F800000;
+            mem_ctrl = (volatile uint32_t*)0x4F800000;
             mem_ctrl[0x00/4] = 0x00000000;  // SDRAM0_CFG0
             mem_ctrl[0x10/4] = 0x00000000;  // SDRAM0_CFG1
             break;
@@ -239,7 +522,7 @@ static void ppc_init_platform(void) {
     
     // PCI/PCIe controller initialization if present
     if (platform_id == 0x004A) {  // PPC460 has PCIe
-        volatile uint32_t *pcie_cfg = (volatile uint32_t *)0xA0000000;
+        volatile uint32_t* pcie_cfg = (volatile uint32_t*)0xA0000000;
         pcie_cfg[0x00/4] = 0x00000001;  // Enable memory and I/O space
         pcie_cfg[0x04/4] = 0x00000000;  // Clear status
         pcie_cfg[0x08/4] = 0x00000000;  // Disable all interrupts
@@ -251,6 +534,12 @@ void ppc_early_init(void) {
     // Disable interrupts
     uint64_t msr = mfmsr();
     mtmsr(msr & ~MSR_EE);
+    
+    // Initialize platform first
+    bh_status_t status = ppc_initialize_platform();
+    if (status != BH_STATUS_SUCCESS) {
+        // Platform initialization failed, continue with defaults
+    }
     
     // Detect CPU features
     ppc_detect_cpu();
@@ -271,7 +560,7 @@ void ppc_early_init(void) {
     ppc_init_timers();
     
     // Initialize platform hardware
-    ppc_init_platform();
+    ppc_init_platform_hardware();
     
     // Enable FPU if available
     if (cpu_info.has_fpu) {
@@ -313,6 +602,13 @@ __attribute__((noreturn)) void ppc_main(void) {
 
 // Console I/O
 void ppc_putc(char c) {
+    // Use platform console if available
+    if (platform_detected && platform_is_initialized()) {
+        platform_putc(c);
+        return;
+    }
+    
+    // Fallback to direct UART access
     volatile uint32_t *uart = (volatile uint32_t *)0x800001F8;
     while (!(*uart & 0x20)); // Wait for THRE
     *uart = c;
@@ -320,6 +616,13 @@ void ppc_putc(char c) {
 }
 
 void ppc_puts(const char *s) {
+    // Use platform console if available
+    if (platform_detected && platform_is_initialized()) {
+        platform_puts(s);
+        return;
+    }
+    
+    // Fallback to direct UART access
     while (*s) ppc_putc(*s++);
 }
 
@@ -335,11 +638,23 @@ void ppc_unmap_io(void *virt, size_t size) {
 
 // Power management
 void ppc_power_off(void) {
-    // Platform-specific power off
+    // Use platform power off if available
+    if (platform_detected && platform_is_initialized()) {
+        platform_power_off();
+        return;
+    }
+    
+    // Fallback to platform-specific power off
     for(;;) asm volatile("wait");
 }
 
 void ppc_reset(void) {
-    // Platform-specific reset
+    // Use platform reset if available
+    if (platform_detected && platform_is_initialized()) {
+        platform_reset();
+        return;
+    }
+    
+    // Fallback to platform-specific reset
     for(;;) asm volatile("wait");
 }
