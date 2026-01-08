@@ -318,14 +318,6 @@ See CONTRIBUTING.md for contribution guidelines. We welcome PRs and issues from 
 
 BloodHorn is built from scratch as a modern bootloader implementation. While inspired by niche bootloaders like Limine and others in the open-source ecosystem, all code and intellectual property is owned by BloodyHell Industries INC (which is a legal entity under contracts that follow the USA law).
 
-This project was developed exclusively by human developers through manual coding processes. No artificial intelligence tools, automated code generation systems, or third-party code synthesis services were utilized in any phase of development. All source code represents original intellectual work created by the development team at BloodyHell Industries INC. We maintain complete authorship and copyright ownership of all codebase components.
-
-BloodHorn Industries INC hereby affirms under penalty of perjury that this project constitutes entirely original software development. All source code, algorithms, implementations, and architectural designs are the product of human intellectual effort by our development team. The project contains no copied, derived, or synthesized code from any external sources beyond standard protocol implementations and legally incorporated dependencies.
-
-Under 17 U.S.C. § 102 and applicable international copyright law, we maintain exclusive rights to all original works contained herein. Any allegations of plagiarism, code theft, or AI-generated content are unequivocally false and without merit. We maintain full legal title and copyright to all proprietary components of this codebase and will vigorously defend our intellectual property rights against any false claims.
-
-This statement is made in good faith and with full knowledge of its legal consequences under applicable state and federal laws.
-
 ## License
 
 BloodHorn is licensed under the BSD-2-Clause-Patent License. See `LICENSE` for details.
