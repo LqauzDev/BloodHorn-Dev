@@ -310,6 +310,12 @@ BloodHorn started as a prototype in 2016 and evolved into a cross-architecture b
 
 ![First BloodHorn Screenshot (2016)](./2016screenshot.png)
 
+### Current BloodHorn Menu
+
+![BloodHorn Menu Screenshot](./bloodhorn.png)
+
+*Screenshot credit: [Lqauz](https://github.com/LqauzDev) - Thank you for capturing the current BloodHorn interface! (Screenshot taken in x86 QEMU virtual environment)*
+
 ## Contributing
 
 See CONTRIBUTING.md for contribution guidelines. We welcome PRs and issues from the community.
