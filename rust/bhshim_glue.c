@@ -13,7 +13,8 @@
 #include "rust/bhshim/bhshim.h"
 
 // Wrapper that matches bh_system_table->get_memory_map signature.
-bh_status_t
+EFI_STATUS
+EFIAPI
 bhshim_get_memory_map(
     bh_memory_descriptor_t **Map,
     bh_size_t *MapSize,
@@ -21,6 +22,11 @@ bhshim_get_memory_map(
 )
 {
     if (!Map || !MapSize || !DescriptorSize || gBS == NULL) {
+        return BH_INVALID_PARAMETER;
+    }
+    
+    // Validate reasonable limits
+    if (*MapSize > 1024*1024 || *DescriptorSize > 4096) {
         return BH_INVALID_PARAMETER;
     }
 

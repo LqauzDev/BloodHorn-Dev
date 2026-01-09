@@ -125,6 +125,12 @@ ReadFile(
     }
 
     // Allocate buffer for file contents
+    if (FileInfo->FileSize > 1024*1024*1024) { // 1GB limit
+        FreePool(FileInfo);
+        FileHandle->Close(FileHandle);
+        return EFI_OUT_OF_RESOURCES;
+    }
+    
     FileBuffer = AllocatePool((UINTN)FileInfo->FileSize);
     if (FileBuffer == NULL) {
         FreePool(FileInfo);

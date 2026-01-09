@@ -479,7 +479,10 @@ STATIC VOID ApplyIniToConfig(const CHAR8* ini, BOOT_CONFIG* config) {
             CHAR8* rb = AsciiStrStr(line, "]");
             if (rb) {
                 *rb = 0;
-                AsciiStrCpyS(section, sizeof(section), line + 1);
+                UINTN section_len = AsciiStrLen(line + 1);
+                if (section_len < sizeof(section)) {
+                    AsciiStrCpyS(section, sizeof(section), line + 1);
+                }
             }
             FreePool(line); continue;
         }
@@ -492,11 +495,15 @@ STATIC VOID ApplyIniToConfig(const CHAR8* ini, BOOT_CONFIG* config) {
         // Apply the setting based on section and key
         if (str_ieq(section, "boot")) {
             if (str_ieq(k, "default")) {
-                AsciiStrCpyS(config->default_entry, sizeof(config->default_entry), v);
-            } else if (str_ieq(k, "menu_timeout")) {
-                config->menu_timeout = (int)AsciiStrDecimalToUintn(v);
+                UINTN vlen = AsciiStrLen(v);
+                if (vlen < sizeof(config->default_entry)) {
+                    AsciiStrCpyS(config->default_entry, sizeof(config->default_entry), v);
+                }
             } else if (str_ieq(k, "language")) {
-                AsciiStrCpyS(config->language, sizeof(config->language), v);
+                UINTN vlen = AsciiStrLen(v);
+                if (vlen < sizeof(config->language)) {
+                    AsciiStrCpyS(config->language, sizeof(config->language), v);
+                }
             } else if (str_ieq(k, "secure_boot")) {
                 config->secure_boot = parse_bool_ascii(v, config->secure_boot);
             } else if (str_ieq(k, "tpm_enabled")) {
@@ -506,11 +513,20 @@ STATIC VOID ApplyIniToConfig(const CHAR8* ini, BOOT_CONFIG* config) {
             }
         } else if (str_ieq(section, "linux")) {
             if (str_ieq(k, "kernel")) {
-                AsciiStrCpyS(config->kernel, sizeof(config->kernel), v);
+                UINTN vlen = AsciiStrLen(v);
+                if (vlen < sizeof(config->kernel)) {
+                    AsciiStrCpyS(config->kernel, sizeof(config->kernel), v);
+                }
             } else if (str_ieq(k, "initrd")) {
-                AsciiStrCpyS(config->initrd, sizeof(config->initrd), v);
+                UINTN vlen = AsciiStrLen(v);
+                if (vlen < sizeof(config->initrd)) {
+                    AsciiStrCpyS(config->initrd, sizeof(config->initrd), v);
+                }
             } else if (str_ieq(k, "cmdline")) {
-                AsciiStrCpyS(config->cmdline, sizeof(config->cmdline), v);
+                UINTN vlen = AsciiStrLen(v);
+                if (vlen < sizeof(config->cmdline)) {
+                    AsciiStrCpyS(config->cmdline, sizeof(config->cmdline), v);
+                }
             }
         }
         FreePool(line);
@@ -518,19 +534,84 @@ STATIC VOID ApplyIniToConfig(const CHAR8* ini, BOOT_CONFIG* config) {
 }
 
 STATIC VOID ApplyJsonToConfig(const CHAR8* js, BOOT_CONFIG* config) {
-    // Minimal substring extraction; this is not a full JSON parser but adequate for expected fields.
-    #define FIND_STR(key, dst) do { const CHAR8* p = AsciiStrStr((CHAR8*)js, key); if (p) { p = AsciiStrStr((CHAR8*)p, ":"); if (p) { p++; while (*p==' '||*p=='\t' || *p=='\n') p++; if (*p=='\"') { p++; const CHAR8* q=p; while (*q && *q!='\"') q++; UINTN L=(UINTN)(q-p); CHAR8 tmp[512]={0}; if (L>=sizeof(tmp)) L=sizeof(tmp)-1; CopyMem(tmp,p,L); tmp[L]=0; AsciiStrCpyS(dst, sizeof(dst), tmp); } } } } while(0)
-    #define FIND_INT(key, dst) do { const CHAR8* p = AsciiStrStr((CHAR8*)js, key); if (p) { p = AsciiStrStr((CHAR8*)p, ":"); if (p) { p++; while (*p==' '||*p=='\t'||*p=='\n') p++; INTN val=0; while (*p>='0'&&*p<='9'){ val = val*10 + (*p-'0'); p++; } dst = (int)val; } } } while(0)
-    #define FIND_BOOL(key, dst) do { const CHAR8* p = AsciiStrStr((CHAR8*)js, key); if (p) { p = AsciiStrStr((CHAR8*)p, ":"); if (p) { p++; while (*p==' '||*p=='\t'||*p=='\n') p++; if (AsciiStrnCmp(p, "true", 4)==0) dst=TRUE; else if (AsciiStrnCmp(p,"false",5)==0) dst=FALSE; } } } while(0)
-
-    FIND_STR("\"default\"", config->default_entry);
-    FIND_INT("\"menu_timeout\"", config->menu_timeout);
-    FIND_STR("\"language\"", config->language);
-
-    // entries.linux
-    FIND_STR("\"kernel\"", config->kernel);
-    FIND_STR("\"initrd\"", config->initrd);
-    FIND_STR("\"cmdline\"", config->cmdline);
+    if (!js || !config) return;
+    
+    // Safe JSON parsing functions
+    STATIC EFI_STATUS safe_extract_string(const CHAR8* json, const CHAR8* key, CHAR8* dst, UINTN dst_size) {
+        const CHAR8* p = AsciiStrStr(json, key);
+        if (!p) return EFI_NOT_FOUND;
+        
+        p = AsciiStrStr(p, ":");
+        if (!p) return EFI_NOT_FOUND;
+        p++;
+        
+        // Skip whitespace
+        while (*p == ' ' || *p == '\t' || *p == '\n') p++;
+        
+        if (*p != '\"') return EFI_NOT_FOUND;
+        p++;
+        
+        const CHAR8* q = p;
+        while (*q && *q != '\"' && (q - p) < 512) q++;
+        
+        UINTN len = (UINTN)(q - p);
+        if (len >= dst_size) len = dst_size - 1;
+        
+        CopyMem(tmp, p, len);
+        tmp[len] = 0;
+        AsciiStrCpyS(dst, dst_size, tmp);
+        return EFI_SUCCESS;
+    }
+    
+    STATIC EFI_STATUS safe_extract_int(const CHAR8* json, const CHAR8* key, int* dst) {
+        const CHAR8* p = AsciiStrStr(json, key);
+        if (!p) return EFI_NOT_FOUND;
+        
+        p = AsciiStrStr(p, ":");
+        if (!p) return EFI_NOT_FOUND;
+        p++;
+        
+        // Skip whitespace
+        while (*p == ' ' || *p == '\t' || *p == '\n') p++;
+        
+        // Parse integer
+        INTN val = 0;
+        while (*p >= '0' && *p <= '9') {
+            val = val * 10 + (*p - '0');
+            p++;
+        }
+        *dst = (int)val;
+        return EFI_SUCCESS;
+    }
+    
+    STATIC EFI_STATUS safe_extract_bool(const CHAR8* json, const CHAR8* key, BOOLEAN* dst) {
+        const CHAR8* p = AsciiStrStr(json, key);
+        if (!p) return EFI_NOT_FOUND;
+        
+        p = AsciiStrStr(p, ":");
+        if (!p) return EFI_NOT_FOUND;
+        p++;
+        
+        // Skip whitespace
+        while (*p == ' ' || *p == '\t' || *p == '\n') p++;
+        
+        if (AsciiStrnCmp(p, "true", 4) == 0) {
+            *dst = TRUE;
+        } else if (AsciiStrnCmp(p, "false", 5) == 0) {
+            *dst = FALSE;
+        } else {
+            return EFI_NOT_FOUND;
+        }
+        return EFI_SUCCESS;
+    }
+    
+    // Extract configuration values safely
+    safe_extract_string(js, "\"default\"", config->default_entry, sizeof(config->default_entry));
+    safe_extract_int(js, "\"menu_timeout\"", &config->menu_timeout);
+    safe_extract_string(js, "\"language\"", config->language, sizeof(config->language));
+    safe_extract_string(js, "\"kernel\"", config->kernel, sizeof(config->kernel));
+    safe_extract_string(js, "\"initrd\"", config->initrd, sizeof(config->initrd));
+    safe_extract_string(js, "\"cmdline\"", config->cmdline, sizeof(config->cmdline));
 }
 
 STATIC VOID ApplyUefiEnvOverrides(BOOT_CONFIG* config) {
@@ -647,18 +728,26 @@ STATIC VOID ApplyUefiEnvOverrides(BOOT_CONFIG* config) {
         // Use Coreboot for hardware initialization when available
         if (CorebootInitGraphics()) {
             Print(L"Graphics initialized using Coreboot framebuffer\n");
+        } else {
+            Print(L"Warning: Coreboot graphics initialization failed\n");
         }
 
         if (CorebootInitStorage()) {
             Print(L"Storage initialized by Coreboot\n");
+        } else {
+            Print(L"Warning: Coreboot storage initialization failed\n");
         }
 
         if (CorebootInitNetwork()) {
             Print(L"Network initialized by Coreboot\n");
+        } else {
+            Print(L"Warning: Coreboot network initialization failed\n");
         }
 
         if (CorebootInitTpm()) {
             Print(L"TPM initialized by Coreboot\n");
+        } else {
+            Print(L"Warning: Coreboot TPM initialization failed\n");
         }
 
         // Use UEFI for higher-level services
@@ -1164,9 +1253,15 @@ EFI_STATUS EFIAPI BootBloodchainWrapper(VOID) {
         MapSize = 0;
         EStatus = gBS->GetMemoryMap(&MapSize, MemMap, &MapKey, &DescSize, &DescVer);
         if (EStatus == EFI_BUFFER_TOO_SMALL) {
-            if (MemMap) { FreePool(MemMap); MemMap = NULL; }
+            if (MemMap) { 
+                FreePool(MemMap); 
+                MemMap = NULL; 
+            }
             MemMap = AllocatePool(MapSize);
-            if (!MemMap) { EStatus = EFI_OUT_OF_RESOURCES; break; }
+            if (!MemMap) { 
+                EStatus = EFI_OUT_OF_RESOURCES; 
+                break; 
+            }
             EStatus = gBS->GetMemoryMap(&MapSize, MemMap, &MapKey, &DescSize, &DescVer);
         }
 

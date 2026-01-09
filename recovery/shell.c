@@ -23,7 +23,16 @@ void shell_init(void) {
 }
 
 void shell_parse_command(const char* input) {
-    strcpy(cmd_buffer, input);
+    if (!input) return;
+    
+    UINTN input_len = strlen(input);
+    if (input_len >= sizeof(cmd_buffer)) {
+        input_len = sizeof(cmd_buffer) - 1;
+    }
+    
+    CopyMem(cmd_buffer, input, input_len);
+    cmd_buffer[input_len] = 0;
+    
     arg_count = 0;
     char* token = strtok(cmd_buffer, " ");
     while (token && arg_count < MAX_ARGS) {
@@ -45,7 +54,7 @@ void shell_execute_command(void) {
     } else if (strcmp(args[0], "ls") == 0) {
         printf("Filesystem not mounted\n");
     } else if (strcmp(args[0], "cat") == 0) {
-        if (arg_count > 1) {
+        if (arg_count > 1 && args[1] != NULL) {
             printf("File '%s' not found\n", args[1]);
         } else {
             printf("Usage: cat <filename>\n");
@@ -56,7 +65,7 @@ void shell_execute_command(void) {
     } else if (strcmp(args[0], "clear") == 0) {
         printf("\033[2J\033[H");
     } else {
-        printf("Unknown command: %s\n", args[0]);
+        printf("Unknown command: %s\n", args[0] ? args[0] : "(null)");
     }
 }
 

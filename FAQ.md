@@ -1,6 +1,44 @@
 # Frequently Asked Questions
 
-### What are the system requirements for BloodHorn?
+### Theme and Customization Support
+
+BloodHorn provides comprehensive theming and customization capabilities:
+
+#### Theme System Features
+- **Color Support**: Full 32-bit RGB color palette for all UI elements
+- **Background Options**: Solid color fills or custom image backgrounds
+- **Font Rendering**: Support for bitmap, PCF, TrueType, and OpenType fonts
+- **Dynamic Loading**: Runtime theme configuration from multiple sources
+
+#### Theme Configuration
+```ini
+[theme]
+background_color = 0x1A1A2E
+background_image = custom_bg.png
+text_color = 0xFFFFFF
+header_color = 0x2D2D4F
+highlight_color = 0x4A4A8A
+selected_text_color = 0x000000
+footer_color = 0x8888AA
+```
+
+#### Supported Image Formats
+- **Bitmap**: BMP files (uncompressed)
+- **PNG**: Portable Network Graphics (lossless compression)
+- **JPEG**: Joint Photographic Experts Group format
+- **File Size Limit**: 1GB maximum for security and performance
+
+#### Implementation Architecture
+- Theme management through `boot/theme.c` and `boot/theme.h`
+- Image loading via FreeType library in `boot/font.c`
+- Graphics rendering using UEFI Graphics Output Protocol
+- Memory management with bounds checking and proper cleanup
+
+#### Technical Notes
+- Background images rendered as base layer before UI elements
+- Theme system provides fallback to solid colors if image loading fails
+- All image operations include security validation and error handling
+- Compatible with both UEFI and Coreboot graphics initialization
 
 **Minimum Requirements:**
 - **CPU**: x86_64, AArch64 (ARM64), or RISC-V 64-bit

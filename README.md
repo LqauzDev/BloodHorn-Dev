@@ -297,7 +297,7 @@ BloodHorn is configurable through multiple formats:
 
 ![Community](https://img.shields.io/badge/Community-Welcome-brightgreen)
 
-Submit test results via Codeberg Issues with:
+Submit test results via GitHub Issues with:
 - Platform, Architecture, Firmware, OS, Version, Result, Issues
 
 ---
@@ -314,7 +314,7 @@ BloodHorn started as a prototype in 2016 and evolved into a cross-architecture b
 
 ![BloodHorn Menu Screenshot](./bloodhorn.png)
 
-*Screenshot credit: [Lqauz](https://github.com/LqauzDev) - Thank you for capturing the current BloodHorn interface! (Screenshot taken in x86 QEMU virtual environment)*
+*Screenshot credit: [Lqauz](https://github.com/LqauzDev) . Thank you for capturing the current BloodHorn interface! (Screenshot taken in x86 QEMU virtual environment. tested in a dual booted VM) wallpaper can be found [here](https://wallpaperaccess.com/4k-dog)*
 
 ## Contributing
 

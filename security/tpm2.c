@@ -449,9 +449,15 @@ int measured_boot_measure_kernel(MeasuredBootContext* context, const void* kerne
 int tpm2_measure_file(uint32_t pcr_index, uint32_t event_type, const char* filename, const void* file_data, uint32_t file_size) {
     if (!filename || !file_data) return -1;
     
+    // Check for reasonable size limits to prevent memory exhaustion
+    if (file_size > 1024*1024) return -1; // 1MB limit
+    
     // Create event data with filename + file hash
     uint32_t filename_len = strlen(filename) + 1;
     uint32_t total_size = filename_len + file_size;
+    
+    // Check for integer overflow
+    if (total_size < filename_len || total_size < file_size) return -1;
     
     uint8_t* event_data = (uint8_t*)malloc(total_size);
     if (!event_data) return -1;

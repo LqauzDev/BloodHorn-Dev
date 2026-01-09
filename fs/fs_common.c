@@ -51,22 +51,25 @@ char *fs_join_path(const char *dir, const char *file) {
     size_t file_len = strlen(file);
     
     // Allocate space for the result
-    char *result = (char *)kmalloc(dir_len + file_len + 2); // +2 for possible slash and null terminator
+    size_t total_len = dir_len + file_len + 2; // +2 for possible slash and null terminator
+    char *result = (char *)kmalloc(total_len);
     if (!result) return NULL;
     
     // Copy directory part
-    strcpy(result, dir);
+    strncpy(result, dir, total_len - 1);
+    result[dir_len] = 0;
     
     // Add separator if needed
     if (dir_len > 0 && dir[dir_len-1] != '/' && file[0] != '/') {
-        strcat(result, "/");
+        strncat(result, "/", total_len - strlen(result) - 1);
     } else if (dir_len > 0 && dir[dir_len-1] == '/' && file[0] == '/') {
         // Remove duplicate slash
         file++;
     }
     
     // Append the file part
-    strcat(result, file);
+    strncat(result, file, total_len - strlen(result) - 1);
+    result[total_len - 1] = 0; // Ensure null termination
     
     return result;
 }
