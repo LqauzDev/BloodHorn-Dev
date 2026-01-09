@@ -70,8 +70,9 @@ Planned support:
 ### How do I report security vulnerabilities?
 
 Please report security issues responsibly to:
-- Email: security@bloodyhell.industries
-- PGP Key: [Available on our website]
+- Email: contact@softwaresforall.eu.cc
+- PGP Fingerprint:
+  4666 F3B4 9C6F 32B1 87B1  75ED E6BA EE33 6175 0DB2
 
 We appreciate responsible disclosure and will acknowledge all valid reports.
 

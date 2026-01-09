@@ -18,6 +18,11 @@ This guide explains BloodHorn's security features and best practices for secure 
 
 BloodHorn implements a comprehensive security model designed to protect the boot process from tampering and unauthorized modifications.
 
+### Disclose Bugs
+
+- Email: contact@softwaresforall.eu.cc
+- PGP Fingerprint: 4666 F3B4 9C6F 32B1 87B1 75ED E6BA EE33 6175 0DB2
+
 ### Security Principles
 
 - **Chain of Trust**: Each component verifies the next in the boot chain
