@@ -297,7 +297,7 @@ BloodHorn is configurable through multiple formats:
 
 ![Community](https://img.shields.io/badge/Community-Welcome-brightgreen)
 
-Submit test results via GitHub Issues with:
+Submit test results via Codeberg Issues with:
 - Platform, Architecture, Firmware, OS, Version, Result, Issues
 
 ---
