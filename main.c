@@ -92,9 +92,7 @@
 #include "fs/fat32.h"                 // FAT32 filesystem support - most common format
 #include "security/crypto.h"          // Cryptographic functions - encryption, hashing
 #include "security/tpm2.h"            // TPM 2.0 integration - hardware security
-#include "scripting/lua.h"            // Lua scripting - for advanced customization
 #include "recovery/shell.h"            // Recovery shell - when things go wrong
-#include "plugins/plugin.h"            // Plugin system - extensibility
 #include "net/pxe.h"                  // PXE network boot - boot from the network
 #include "boot/Arch32/powerpc.h"     // PowerPC architecture support
 #include "boot/BootManagerProtocol/BootManagerProtocol.h"  // Boot Manager Protocol

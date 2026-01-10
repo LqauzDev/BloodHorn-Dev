@@ -21,8 +21,6 @@
   gBloodHornTokenSpaceGuid.PcdSecureBootEnabled|FALSE
   gBloodHornTokenSpaceGuid.PcdGuiEnabled|TRUE
   gBloodHornTokenSpaceGuid.PcdNetworkEnabled|FALSE
-  gBloodHornTokenSpaceGuid.PcdLuaScriptingEnabled|TRUE
-  gBloodHornTokenSpaceGuid.PcdPluginSystemEnabled|TRUE
 
   # Hardware support PCDs
   gBloodHornTokenSpaceGuid.PcdSupportX86_64|TRUE
