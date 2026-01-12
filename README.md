@@ -329,7 +329,7 @@ BloodHorn started as a prototype in 2016 and evolved into a cross-architecture b
 
 ![BloodHorn Menu Screenshot](./bloodhorn.png)
 
-*Screenshot credit: [Lqauz](https://github.com/LqauzDev) . Thank you for capturing the current BloodHorn interface! (Screenshot taken in x86 QEMU virtual environment. tested in a dual booted VM) wallpaper can be found [here](https://wallpaperaccess.com/4k-dog)*
+*Screenshot credit: [Lqauz](https://github.com/LqauzDev) . Thank you for capturing the current BloodHorn interface! (Screenshot taken in x86 QEMU virtual environment. tested in a dual booted VM) 
 
 ## Contributing
 
