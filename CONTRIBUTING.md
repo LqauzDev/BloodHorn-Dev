@@ -211,3 +211,16 @@ If you’re stuck or unsure about an internal detail:
 
 Contributions that respect the constraints of bootloader work (tight
 environments, security implications, weird firmware) are welcome.
+
+---
+
+## Commit messages and releases 
+
+We use **Conventional Commits** and automated Semantic Versioning to keep a clear, trackable history.
+
+- Use Conventional Commit messages (eg. `feat: add x`, `fix: correct y`, `chore(release): bump v1.2.3`).
+- Pull requests will be checked for commit message format by CI (`.github/workflows/commitlint.yml`).
+- Merges to `main` (or `master`) will trigger the release workflow which creates semver tags and GitHub releases using `semantic-release` (`.github/workflows/release.yml`).
+
+See `.commitlintrc.json` and `.releaserc.json` for configuration.
+

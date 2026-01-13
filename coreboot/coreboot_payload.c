@@ -20,6 +20,8 @@
 #include <IndustryStandard/SmBios.h>
 #include "coreboot_platform.h"
 #include "coreboot_payload.h"
+#include "../boot/menu.h"
+#include "../boot/settings.h"
 
 // Coreboot payload entry point signature
 typedef VOID (*COREBOOT_PAYLOAD_ENTRY)(VOID* coreboot_table, VOID* payload);
@@ -317,17 +319,11 @@ BloodhornBootMenu (
     CONST UINTN MaxEntries = 8;
 
     // Boot menu entries
-    CONST CHAR16* BootEntries[] = {
-        L"Linux Kernel",
-        L"Multiboot2 Kernel",
-        L"Limine Kernel",
-        L"Chainload Bootloader",
-        L"PXE Network Boot",
-        L"BloodChain Protocol",
-        L"Recovery Shell",
-        L"Reboot System"
-    };
+    // Register boot entries below using the centralized menu APIs
+    Print(L"\nBloodHorn Boot Menu (Coreboot Payload)\n");
+    Print(L"========================================\n\n");
 
+    // Register boot entries using the centralized menu implementation
     typedef EFI_STATUS (*BootFunctionPtr)(VOID);
     BootFunctionPtr BootFunctions[] = {
         BloodhornBootLinux,
@@ -340,52 +336,224 @@ BloodhornBootMenu (
         BloodhornReboot
     };
 
-    // Load configuration to determine default entry and timeout
-    UINTN Timeout = 10; // Default 10 seconds
-    UINTN DefaultEntry = 0;
+    // Try to get display names from config; fall back to defaults.
+    extern const char* config_get_string(const char* section, const char* key);
+    const char* linux_name = config_get_string("linux", "name");
+    const char* mb2_name = config_get_string("multiboot2", "name");
+    const char* limine_name = config_get_string("limine", "name");
+    const char* chain_name = config_get_string("chainload", "name");
+    const char* pxe_name = config_get_string("pxe", "name");
+    const char* bc_name = config_get_string("bloodchain", "name");
+    const char* recovery_name = config_get_string("recovery", "name");
 
-    Print(L"\nBloodHorn Boot Menu (Coreboot Payload)\n");
-    Print(L"========================================\n\n");
+    // Helper to convert ASCII to CHAR16 for AddBootEntry
+    static void AsciiToUnicode(const char* s, CHAR16* dst, UINTN dstlen) {
+        if (!s || !s[0]) {
+            if (dstlen > 0) dst[0] = 0;
+            return;
+        }
+        UINTN i = 0;
+        for (; s[i] && i < dstlen - 1; ++i) dst[i] = (CHAR16)s[i];
+        dst[i] = 0;
+    }
 
-    // Display boot options
-    for (UINTN i = 0; i < MaxEntries; i++) {
-        if (i == DefaultEntry) {
-            Print(L"[%u] %s (default)\n", i + 1, BootEntries[i]);
+    // ASCII-only case-insensitive compare (returns 0 when equal, like strcmp)
+    static INTN ascii_stricmp(const CHAR8* a, const CHAR8* b) {
+        if (!a || !b) return (a == b) ? 0 : 1;
+        UINTN i = 0;
+        while (a[i] && b[i]) {
+            CHAR8 ca = a[i];
+            CHAR8 cb = b[i];
+            if (ca >= 'A' && ca <= 'Z') ca = (CHAR8)(ca - 'A' + 'a');
+            if (cb >= 'A' && cb <= 'Z') cb = (CHAR8)(cb - 'A' + 'a');
+            if (ca != cb) return (INTN)(ca - cb);
+            i++;
+        }
+        return (INTN)((UINT8)a[i] - (UINT8)b[i]);
+    }
+
+    CHAR16 tmp[128];
+
+    if (linux_name && linux_name[0]) {
+        AsciiToUnicode(linux_name, tmp, sizeof(tmp)/sizeof(CHAR16));
+        AddBootEntry(tmp, BloodhornBootLinux);
+    } else {
+        AddBootEntry(L"Linux Kernel", BloodhornBootLinux);
+    }
+
+    if (mb2_name && mb2_name[0]) {
+        AsciiToUnicode(mb2_name, tmp, sizeof(tmp)/sizeof(CHAR16));
+        AddBootEntry(tmp, BloodhornBootMultiboot2);
+    } else {
+        AddBootEntry(L"Multiboot2 Kernel", BloodhornBootMultiboot2);
+    }
+
+    if (limine_name && limine_name[0]) {
+        AsciiToUnicode(limine_name, tmp, sizeof(tmp)/sizeof(CHAR16));
+        AddBootEntry(tmp, BloodhornBootLimine);
+    } else {
+        AddBootEntry(L"Limine Kernel", BloodhornBootLimine);
+    }
+
+    if (chain_name && chain_name[0]) {
+        AsciiToUnicode(chain_name, tmp, sizeof(tmp)/sizeof(CHAR16));
+        AddBootEntry(tmp, BloodhornBootChainload);
+    } else {
+        AddBootEntry(L"Chainload Bootloader", BloodhornBootChainload);
+    }
+
+    if (pxe_name && pxe_name[0]) {
+        AsciiToUnicode(pxe_name, tmp, sizeof(tmp)/sizeof(CHAR16));
+        AddBootEntry(tmp, BloodhornBootPxe);
+    } else {
+        AddBootEntry(L"PXE Network Boot", BloodhornBootPxe);
+    }
+
+    if (bc_name && bc_name[0]) {
+        AsciiToUnicode(bc_name, tmp, sizeof(tmp)/sizeof(CHAR16));
+        AddBootEntry(tmp, BloodhornBootBloodchain);
+    } else {
+        AddBootEntry(L"BloodChain Protocol", BloodhornBootBloodchain);
+    }
+
+    if (recovery_name && recovery_name[0]) {
+        AsciiToUnicode(recovery_name, tmp, sizeof(tmp)/sizeof(CHAR16));
+        AddBootEntry(tmp, BloodhornBootRecovery);
+    } else {
+        AddBootEntry(L"Recovery Shell", BloodhornBootRecovery);
+    }
+
+    AddBootEntry(L"Reboot System", BloodhornReboot);
+
+    // Determine default entry by name (string-based) or fall back to numeric index
+    INTN DefaultEntryIdx = 0;
+    const char* default_name = NULL;
+
+    // Try common config locations for a default entry name
+    default_name = config_get_string("global", "default");
+    if (!default_name || !default_name[0]) default_name = config_get_string("boot", "default");
+    if (!default_name || !default_name[0]) default_name = config_get_string("default", "");
+
+    // Map candidate names to known tokens
+    const char* tokens[] = {"linux", "multiboot2", "limine", "chainload", "pxe", "bloodchain", "recovery", "reboot"};
+    UINTN token_count = sizeof(tokens)/sizeof(tokens[0]);
+
+    if (default_name && default_name[0]) {
+        // Try token match first
+        for (UINTN i = 0; i < token_count; ++i) {
+            if (ascii_stricmp(default_name, tokens[i]) == 0) {
+                DefaultEntryIdx = (INTN)i;
+                break;
+            }
+        }
+        // If still not matched, try matching display names (case-insensitive)
+        if ((UINTN)DefaultEntryIdx == 0 && ascii_stricmp(default_name, "linux") != 0) {
+            // compare against added names
+            for (UINTN i = 0; i < token_count; ++i) {
+                // Convert boot entry name to ASCII minimal check: get config name for same token
+                const char* name = NULL;
+                switch (i) {
+                    case 0: name = linux_name; break;
+                    case 1: name = mb2_name; break;
+                    case 2: name = limine_name; break;
+                    case 3: name = chain_name; break;
+                    case 4: name = pxe_name; break;
+                    case 5: name = bc_name; break;
+                    case 6: name = recovery_name; break;
+                    default: name = NULL; break;
+                }
+                if (name && name[0] && ascii_stricmp(name, default_name) == 0) {
+                    DefaultEntryIdx = (INTN)i;
+                    break;
+                }
+            }
+        }
+    }
+
+    // Determine auto-boot and timeout from configuration (string-based)
+    BOOLEAN auto_boot = FALSE;
+    UINTN timeout = 10; // default
+
+    const char* auto_str = config_get_string("global", "auto_boot");
+    if (!auto_str || !auto_str[0]) auto_str = config_get_string("boot", "auto_boot");
+    if (auto_str && auto_str[0]) {
+        if (AsciiStrCmp(auto_str, "1") == 0 || ascii_stricmp(auto_str, "true") == 0 || ascii_stricmp(auto_str, "yes") == 0) {
+            auto_boot = true;
+        }
+    }
+
+    const char* timeout_str = config_get_string("global", "timeout");
+    if (!timeout_str || !timeout_str[0]) timeout_str = config_get_string("boot", "timeout");
+    if (timeout_str && timeout_str[0]) {
+        // Simple decimal parser
+        UINTN v = 0;
+        for (UINTN i = 0; timeout_str[i] >= '0' && timeout_str[i] <= '9'; ++i) {
+            v = v * 10 + (UINTN)(timeout_str[i] - '0');
+        }
+        if (v > 0) timeout = v;
+        else if (v == 0 && timeout_str[0] == '0') timeout = 0; // explicit zero
+    }
+
+    if (auto_boot) {
+        Print(L"\nAuto-boot is enabled; booting default entry...\n");
+        if (DefaultEntryIdx >= 0 && (UINTN)DefaultEntryIdx < sizeof(BootFunctions)/sizeof(BootFunctionPtr)) {
+            Status = BootFunctions[DefaultEntryIdx]();
+            if (EFI_ERROR(Status)) {
+                Print(L"Boot failed: %r\n", Status);
+                Print(L"Press any key to reboot...\n");
+                UINTN Index;
+                gBS->WaitForEvent(1, &gST->ConIn->WaitForKey, &Index);
+                CorebootReboot();
+            }
+            return;
+        }
+    }
+
+    if (timeout == 0) {
+        // Show boot menu immediately and wait indefinitely
+        Status = ShowBootMenu();
+        if (Status == EFI_SUCCESS) return;
+    } else {
+        Print(L"\nPress any key to show boot menu, or wait %u seconds for default...\n", timeout);
+        EFI_EVENT TimerEvent;
+        Status = gBS->CreateEvent(EVT_TIMER, TPL_CALLBACK, NULL, NULL, &TimerEvent);
+        if (!EFI_ERROR(Status)) {
+            gBS->SetTimer(TimerEvent, TimerRelative, (UINT64)timeout * 10000000ULL);
+            EFI_EVENT WaitList[2] = { gST->ConIn->WaitForKey, TimerEvent };
+            UINTN WaitIndex;
+            Status = gBS->WaitForEvent(2, WaitList, &WaitIndex);
+            gBS->CloseEvent(TimerEvent);
+
+            if (!EFI_ERROR(Status) && WaitIndex == 0) {
+                // Key pressed - consume key and show full menu
+                EFI_INPUT_KEY Key;
+                gST->ConIn->ReadKeyStroke(gST->ConIn, &Key);
+                Status = ShowBootMenu();
+                if (Status == EFI_SUCCESS) return;
+            } else {
+                // Timer expired - auto boot default
+                Print(L"\nAuto-booting default entry...\n");
+                if (DefaultEntryIdx >= 0 && (UINTN)DefaultEntryIdx < sizeof(BootFunctions)/sizeof(BootFunctionPtr)) {
+                    Status = BootFunctions[DefaultEntryIdx]();
+                    if (EFI_ERROR(Status)) {
+                        Print(L"Boot failed: %r\n", Status);
+                        Print(L"Press any key to reboot...\n");
+                        UINTN Index;
+                        gBS->WaitForEvent(1, &gST->ConIn->WaitForKey, &Index);
+                        CorebootReboot();
+                    }
+                    return;
+                }
+            }
         } else {
-            Print(L" %u  %s\n", i + 1, BootEntries[i]);
+            // Timer creation failed - fallback to interactive menu
+            Status = ShowBootMenu();
+            if (Status == EFI_SUCCESS) return;
         }
     }
 
-    Print(L"\nPress number key to select, or wait %u seconds for default...\n", Timeout);
-
-    // Simple countdown timer (simplified - real implementation would use timer)
-    for (UINTN i = Timeout; i > 0; i--) {
-        Print(L"\rAuto-boot in %u seconds... (press key to cancel)   ", i);
-
-        // Check for key press (simplified implementation)
-        // In real implementation, would use Coreboot input services
-
-        // For now, just wait a bit
-        for (volatile UINTN j = 0; j < 1000000; j++) {
-            // Busy wait
-        }
-    }
-
-    Print(L"\nBooting default entry...\n");
-
-    // Execute selected boot function
-    Status = BootFunctions[DefaultEntry]();
-    if (EFI_ERROR(Status)) {
-        Print(L"Boot failed: %r\n", Status);
-        Print(L"Press any key to reboot...\n");
-
-        // Wait for key press
-        for (volatile UINTN j = 0; j < 10000000; j++) {
-            // Busy wait for key press
-        }
-
-        CorebootReboot();
-    }
+    Print(L"Boot process completed, rebooting...\n");
+    CorebootReboot();
 }
 
 /**
@@ -857,16 +1025,17 @@ EFI_STATUS EFIAPI BloodhornBootLimine(VOID) {
     return EFI_NOT_FOUND;
 }
 
+extern EFI_STATUS EFIAPI BootChainloadWrapper(VOID);
+extern EFI_STATUS EFIAPI BootPxeNetworkWrapper(VOID);
+extern EFI_STATUS EFIAPI BootRecoveryShellWrapper(VOID);
+
 EFI_STATUS EFIAPI BloodhornBootChainload(VOID) {
-    // Chainload implementation would load another bootloader
-    Print(L"Chainloading not implemented in Coreboot payload\n");
-    return EFI_UNSUPPORTED;
+    // Delegate to shared implementation used by main/coreboot_main
+    return BootChainloadWrapper();
 }
 
 EFI_STATUS EFIAPI BloodhornBootPxe(VOID) {
-    // PXE boot implementation
-    Print(L"PXE boot not implemented in Coreboot payload\n");
-    return EFI_UNSUPPORTED;
+    return BootPxeNetworkWrapper();
 }
 
 EFI_STATUS EFIAPI BloodhornBootBloodchain(VOID) {
@@ -880,8 +1049,7 @@ EFI_STATUS EFIAPI BloodhornBootBloodchain(VOID) {
 }
 
 EFI_STATUS EFIAPI BloodhornBootRecovery(VOID) {
-    Print(L"Recovery shell not implemented in Coreboot payload\n");
-    return EFI_UNSUPPORTED;
+    return BootRecoveryShellWrapper();
 }
 
 EFI_STATUS EFIAPI BloodhornReboot(VOID) {
@@ -901,6 +1069,32 @@ extern EFI_STATUS CorebootInitStorage(VOID);
 extern EFI_STATUS CorebootInitNetwork(VOID);
 extern EFI_STATUS CorebootInitTpm(VOID);
 extern BOOLEAN CorebootPlatformInit(VOID);
+
+// Weak fallback implementations for optional symbols to keep payload
+// linkable when configuration subsystem or wrappers are not present.
+// Strong definitions elsewhere (e.g., main build) will override these.
+__attribute__((weak))
+const char* config_get_string(const char* section, const char* key) {
+    (void)section; (void)key; return NULL;
+}
+
+__attribute__((weak))
+EFI_STATUS EFIAPI BootChainloadWrapper(VOID) {
+    Print(L"Chainload wrapper not available in payload build\n");
+    return EFI_UNSUPPORTED;
+}
+
+__attribute__((weak))
+EFI_STATUS EFIAPI BootPxeNetworkWrapper(VOID) {
+    Print(L"PXE wrapper not available in payload build\n");
+    return EFI_UNSUPPORTED;
+}
+
+__attribute__((weak))
+EFI_STATUS EFIAPI BootRecoveryShellWrapper(VOID) {
+    Print(L"Recovery wrapper not available in payload build\n");
+    return EFI_UNSUPPORTED;
+}
 
 /**
  * Validate payload header
