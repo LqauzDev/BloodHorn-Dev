@@ -142,9 +142,24 @@ BloodHorn is configurable through multiple formats:
 - UEFI variables for enterprise deployments
 - Environment variables for containerized environments
 
+## Test Methodology & Volunteer Contributions
+
+BloodHorn testing is community-driven and continuously updated to ensure accuracy across multiple architectures and firmware environments.
+
+- **Automated Testing:** Core functionality is validated in QEMU with standardized scripts for boot flow, memory handling, and kernel handoff.
+- **Volunteer Hardware Testing:** Dedicated volunteers run architecture- and firmware-specific tests on real systems. Each test includes:
+  - Platform details (CPU, board)
+    - Firmware version
+      - Operating system version
+        - Test results and issues encountered
+        - **Reporting & Updates:** Test results are submitted via GitHub Issues using a standard template. Results are aggregated weekly and reflected in the test matrix and badges.
+        - **Scope & Transparency:** Tests cover a representative set of configurations, not every possible variant. Partial support is clearly indicated, and known failures are documented to maintain trustworthiness.
+
+        This system ensures that BloodHorn’s compatibility and reliability metrics are based on real-world hardware testing and community verification, not just theoretical builds.
+
 ## Testing & Compatibility
 
-> **Note**: Each architecture is individually tested and maintained by dedicated volunteers and maintainers. 
+> **Note** Each architecture is individually tested and maintained by dedicated volunteers and maintainers. 
 
 ![Total Tests](https://img.shields.io/badge/Tests-1,247-blue) ![Success Rate](https://img.shields.io/badge/Success-95.3%25-brightgreen) ![Coverage](https://img.shields.io/badge/Coverage-97%25-green) ![Last Updated](https://img.shields.io/badge/Updated-Jan%202026-orange)
 
@@ -314,7 +329,7 @@ BloodHorn started as a prototype in 2016 and evolved into a cross-architecture b
 
 ![BloodHorn Menu Screenshot](./bloodhorn.png)
 
-*Screenshot credit: [Lqauz](https://github.com/LqauzDev) . Thank you for capturing the current BloodHorn interface! (Screenshot taken in x86 QEMU virtual environment. tested in a dual booted VM) wallpaper can be found [here](https://wallpaperaccess.com/4k-dog)*
+*Screenshot credit: [Lqauz](https://github.com/LqauzDev) . Thank you for capturing the current BloodHorn interface! (Screenshot taken in x86 QEMU virtual environment. tested in a dual booted VM) 
 
 ## Contributing
 
