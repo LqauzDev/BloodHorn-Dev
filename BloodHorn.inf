@@ -11,19 +11,27 @@
 [Sources]
   main.c
   rust/bhshim_glue.c
+  boot/BootManagerProtocol/BootManager.c
+  boot/BootManagerProtocol/BootManagerLib.c
   boot/font.c
   boot/localization.c
-  # FreeType sources for TTF support
-  boot/freetype/src/base/ftbase.c
-  boot/freetype/src/base/ftbbox.c
-  boot/freetype/src/base/ftbitmap.c
-  boot/freetype/src/base/ftglyph.c
-  boot/freetype/src/base/ftinit.c
-  boot/freetype/src/base/ftsystem.c
-  boot/freetype/src/truetype/truetype.c
-  boot/freetype/src/sfnt/sfnt.c
-  boot/freetype/src/psaux/psaux.c
-  boot/freetype/src/psnames/psnames.c
+  boot/menu.c
+  boot/theme.c
+  boot/mouse.c
+  boot/Arch32/BloodChain/bloodchain.c
+  boot/Arch32/aarch64.c
+  boot/Arch32/chainload.c
+  boot/Arch32/ia32.c
+  boot/Arch32/limine.c
+  boot/Arch32/linux.c
+  boot/Arch32/loongarch64.c
+  boot/Arch32/multiboot1.c
+  boot/Arch32/multiboot2.c
+  boot/Arch32/powerpc.c
+  boot/Arch32/riscv64.c
+  boot/Arch32/x86_64.c
+  fs/fat32.c
+  fs/ext2.c
   net/arp.c
   net/dhcp.c
   net/net_utils.c
@@ -31,22 +39,6 @@
   net/tftp.c
   net/uefi_network.cpp
   security/sha512.c
-  boot/Arch32/BloodChain/bloodchain.c
-  boot/Arch32/linux.c
-  boot/Arch32/limine.c
-  boot/Arch32/multiboot1.c
-  boot/Arch32/multiboot2.c
-  boot/Arch32/chainload.c
-  boot/Arch32/ia32.c
-  boot/Arch32/x86_64.c
-  boot/Arch32/aarch64.c
-  boot/Arch32/riscv64.c
-  boot/Arch32/loongarch64.c
-  boot/menu.c
-  boot/theme.c
-  boot/mouse.c
-  fs/fat32.c
-  fs/ext2.c
   security/crypto.c
   security/tpm2.c
   recovery/shell.c
