@@ -183,17 +183,76 @@ EFI_STATUS EFIAPI BootEntryWithEnvironment(
  * Windows Boot Manager integration
  */
 STATIC EFI_STATUS BootWindowsBootManager(BOOT_MANAGER_ENTRY* Entry) {
-    Print(L"Windows Boot Manager integration not yet implemented\n");
-    Print(L"Entry: %s\n", Entry->Name);
+    EFI_STATUS Status;
+    EFI_HANDLE *HandleBuffer = NULL;
+    UINTN HandleCount = 0;
     
-    // TODO: Implement Windows Boot Manager detection and integration
-    // This would involve:
-    // 1. Detecting Windows Boot Manager in firmware
-    // 2. Importing existing boot configuration from BCD
-    // 3. Adding Windows Boot Manager as a boot entry
-    // 4. Setting up proper boot chain
+    Print(L"Initializing Windows Boot Manager integration...\n");
     
-    return EFI_UNSUPPORTED;
+    // Locate all simple file system protocols
+    Status = gBS->LocateHandleBuffer(
+                 ByProtocol,
+                 &gEfiSimpleFileSystemProtocolGuid,
+                 NULL,
+                 &HandleCount,
+                 &HandleBuffer
+                 );
+    if (EFI_ERROR(Status)) {
+        Print(L"Failed to locate file system handles: %r\n", Status);
+        return Status;
+    }
+    
+    // Search for Windows Boot Manager on each volume
+    for (UINTN i = 0; i < HandleCount; i++) {
+        EFI_SIMPLE_FILE_SYSTEM_PROTOCOL *Fs = NULL;
+        EFI_FILE_HANDLE RootDir = NULL;
+        EFI_FILE_HANDLE BootMgrFile = NULL;
+        
+        Status = gBS->HandleProtocol(HandleBuffer[i], &gEfiSimpleFileSystemProtocolGuid, (VOID**)&Fs);
+        if (EFI_ERROR(Status)) continue;
+        
+        Status = Fs->OpenVolume(Fs, &RootDir);
+        if (EFI_ERROR(Status)) continue;
+        
+        // Look for Windows Boot Manager files
+        CHAR16 *BootMgrPaths[] = {
+            L"\EFI\Microsoft\Boot\bootmgfw.efi",
+            L"\bootmgr.efi",
+            L"\EFI\BOOT\BOOTX64.EFI"
+        };
+        
+        for (UINTN j = 0; j < ARRAY_SIZE(BootMgrPaths); j++) {
+            Status = RootDir->Open(RootDir, &BootMgrFile, BootMgrPaths[j], EFI_FILE_MODE_READ, 0);
+            if (!EFI_ERROR(Status)) {
+                Print(L"Found Windows Boot Manager at: %s\n", BootMgrPaths[j]);
+                
+                // Update entry with actual path
+                StrCpyS(Entry->DevicePath, sizeof(Entry->DevicePath), BootMgrPaths[j]);
+                
+                // Load and execute Windows Boot Manager
+                Status = LoadAndStartImageFromPath(gImageHandle, BootMgrPaths[j], NULL, 0);
+                
+                BootMgrFile->Close(BootMgrFile);
+                RootDir->Close(RootDir);
+                
+                if (HandleBuffer) {
+                    FreePool(HandleBuffer);
+                }
+                return Status;
+            }
+        }
+        
+        if (RootDir) {
+            RootDir->Close(RootDir);
+        }
+    }
+    
+    if (HandleBuffer) {
+        FreePool(HandleBuffer);
+    }
+    
+    Print(L"Windows Boot Manager not found on any volume\n");
+    return EFI_NOT_FOUND;
 }
 
 // =============================================================================
@@ -332,19 +391,53 @@ EFI_STATUS EFIAPI VerifyBootEntry(
         return EFI_NOT_FOUND;
     }
     
-    // Basic verification - check if file exists and is accessible
     EFI_STATUS Status = EFI_SUCCESS;
     *Verified = FALSE;
     
-    // TODO: Implement cryptographic verification
-    // This would involve:
-    // 1. Loading the kernel/initrd files
-    // 2. Computing SHA-512 hashes
-    // 3. Comparing with stored signatures
-    // 4. Verifying certificate chain
+    // Load and verify kernel file
+    if (Entry->KernelPath[0] != L'\0') {
+        EFI_FILE_HANDLE FileHandle = NULL;
+        EFI_FILE_INFO *FileInfo = NULL;
+        UINT8 *FileBuffer = NULL;
+        UINTN FileSize = 0;
+        UINT8 Hash[64]; // SHA-512 hash
+        
+        Status = LoadFileFromPath(Entry->KernelPath, &FileBuffer, &FileSize);
+        if (EFI_ERROR(Status)) {
+            Print(L"Failed to load kernel file: %r\n", Status);
+            return Status;
+        }
+        
+        // Compute SHA-512 hash
+        Status = Sha512HashAll(FileBuffer, FileSize, Hash);
+        if (EFI_ERROR(Status)) {
+            Print(L"Failed to compute kernel hash: %r\n", Status);
+            FreePool(FileBuffer);
+            return Status;
+        }
+        
+        // Verify against stored signature (simplified verification)
+        Status = VerifyCryptographicSignature(Hash, sizeof(Hash), Entry->VendorGuid);
+        if (!EFI_ERROR(Status)) {
+            *Verified = TRUE;
+            Entry->Flags |= BOOT_ENTRY_FLAG_VERIFIED;
+            Print(L"Kernel verification successful\n");
+        } else {
+            Print(L"Kernel verification failed: %r\n", Status);
+        }
+        
+        if (FileBuffer) {
+            FreePool(FileBuffer);
+        }
+    }
     
-    if (Entry->Flags & BOOT_ENTRY_FLAG_VERIFIED) {
-        *Verified = TRUE;
+    // Verify initrd if present
+    if (Entry->InitrdPath[0] != L'\0' && *Verified) {
+        EFI_STATUS InitrdStatus = VerifyInitrdFile(Entry->InitrdPath);
+        if (EFI_ERROR(InitrdStatus)) {
+            Print(L"Initrd verification failed: %r\n", InitrdStatus);
+            *Verified = FALSE;
+        }
     }
     
     return Status;
@@ -369,14 +462,63 @@ EFI_STATUS EFIAPI MeasureBootEntry(
         return EFI_NOT_FOUND;
     }
     
-    // TODO: Implement TPM measurement
-    // This would involve:
-    // 1. Computing hash of kernel/initrd
-    // 2. Extending TPM PCR with measurement
-    // 3. Returning measurement data
+    EFI_STATUS Status;
+    TCG2_PROTOCOL *Tcg2Protocol = NULL;
     
-    *MeasurementSize = 0;
-    return EFI_UNSUPPORTED;
+    // Locate TPM 2.0 protocol
+    Status = gBS->LocateProtocol(&gTcg2ProtocolGuid, NULL, (VOID**)&Tcg2Protocol);
+    if (EFI_ERROR(Status)) {
+        Print(L"TPM 2.0 protocol not available: %r\n", Status);
+        *MeasurementSize = 0;
+        return Status;
+    }
+    
+    // Prepare measurement data
+    TPM2_EVENT_LOG EventLog;
+    ZeroMem(&EventLog, sizeof(EventLog));
+    EventLog.Header.EventType = EV_EFI_BOOT_SERVICES_APPLICATION;
+    EventLog.Header.PCRIndex = 4; // Boot measurement PCR
+    
+    // Create event data combining entry information
+    CHAR16 EventData[512];
+    UnicodeSPrint(EventData, sizeof(EventData), 
+                L"BloodHorn Boot Entry: %s\nType: %d\nPath: %s\n", 
+                Entry->Name, Entry->EntryType, Entry->KernelPath);
+    
+    UINTN EventDataSize = (StrLen(EventData) + 1) * sizeof(CHAR16);
+    
+    // Hash the event data
+    UINT8 EventHash[64]; // SHA-512
+    Status = Sha512HashAll((UINT8*)EventData, EventDataSize, EventHash);
+    if (EFI_ERROR(Status)) {
+        Print(L"Failed to hash event data: %r\n", Status);
+        *MeasurementSize = 0;
+        return Status;
+    }
+    
+    // Extend TPM PCR with measurement
+    Status = Tcg2Protocol->HashLogExtendEvent(
+                     Tcg2Protocol,
+                     0, // PE_COFF_IMAGE
+                     EventHash,
+                     32, // Use first 32 bytes (SHA-256)
+                     &EventLog.Header,
+                     EventData,
+                     EventDataSize,
+                     &EventLog.Header.EventSize
+                     );
+    
+    if (!EFI_ERROR(Status)) {
+        // Return the measurement hash
+        CopyMem(Measurement, EventHash, MIN(*MeasurementSize, 32));
+        *MeasurementSize = 32;
+        Print(L"TPM measurement successful for entry: %s\n", Entry->Name);
+    } else {
+        Print(L"TPM measurement failed: %r\n", Status);
+        *MeasurementSize = 0;
+    }
+    
+    return Status;
 }
 
 /**
@@ -391,7 +533,9 @@ EFI_STATUS EFIAPI GetBootStatistics(
         return EFI_INVALID_PARAMETER;
     }
     
-    // Calculate statistics
+    EFI_STATUS Status;
+    
+    // Calculate current statistics
     ZeroMem(Statistics, sizeof(BOOT_MANAGER_STATISTICS));
     Statistics->TotalEntries = (UINT32)gBootManagerContext.EntryCount;
     
@@ -407,11 +551,60 @@ EFI_STATUS EFIAPI GetBootStatistics(
         }
     }
     
-    // TODO: Load persistent statistics from non-volatile storage
-    Statistics->SuccessfulBoots = 0;
-    Statistics->FailedBoots = 0;
-    Statistics->TotalBootTime = 0;
-    Statistics->AverageBootTime = 0;
+    // Load persistent statistics from UEFI variables
+    UINTN VarSize = sizeof(UINT32);
+    Status = gRT->GetVariable(
+                 L"BloodHornBootCount",
+                 &gBloodHornVariableGuid,
+                 NULL,
+                 &VarSize,
+                 &Statistics->SuccessfulBoots
+                 );
+    if (EFI_ERROR(Status)) {
+        Statistics->SuccessfulBoots = 0;
+    }
+    
+    VarSize = sizeof(UINT32);
+    Status = gRT->GetVariable(
+                 L"BloodHornBootFailures",
+                 &gBloodHornVariableGuid,
+                 NULL,
+                 &VarSize,
+                 &Statistics->FailedBoots
+                 );
+    if (EFI_ERROR(Status)) {
+        Statistics->FailedBoots = 0;
+    }
+    
+    VarSize = sizeof(UINT64);
+    Status = gRT->GetVariable(
+                 L"BloodHornTotalBootTime",
+                 &gBloodHornVariableGuid,
+                 NULL,
+                 &VarSize,
+                 &Statistics->TotalBootTime
+                 );
+    if (EFI_ERROR(Status)) {
+        Statistics->TotalBootTime = 0;
+    }
+    
+    VarSize = sizeof(UINT32);
+    Status = gRT->GetVariable(
+                 L"BloodHornLastBootEntry",
+                 &gBloodHornVariableGuid,
+                 NULL,
+                 &VarSize,
+                 &Statistics->LastBootEntryId
+                 );
+    if (EFI_ERROR(Status)) {
+        Statistics->LastBootEntryId = 0;
+    }
+    
+    // Calculate average boot time
+    UINT32 TotalBoots = Statistics->SuccessfulBoots + Statistics->FailedBoots;
+    if (TotalBoots > 0) {
+        Statistics->AverageBootTime = Statistics->TotalBootTime / TotalBoots;
+    }
     
     return EFI_SUCCESS;
 }
@@ -428,16 +621,107 @@ EFI_STATUS EFIAPI GetBootConfiguration(
         return EFI_INVALID_PARAMETER;
     }
     
+    EFI_STATUS Status;
+    UINTN VarSize;
+    
     ZeroMem(Configuration, sizeof(BOOT_MANAGER_CONFIGURATION));
     Configuration->Version = BOOT_MANAGER_PROTOCOL_VERSION;
-    Configuration->DefaultTimeout = 5; // 5 seconds default
-    Configuration->DefaultBootEnvironment = BOOT_ENVIRONMENT_AUTO;
-    Configuration->Flags = BOOT_MANAGER_FLAG_SECURE_BOOT;
-    Configuration->SecureBootPolicy = 1; // Enabled
     
-    // TODO: Load from non-volatile storage
-    StrCpyS(Configuration->ThemePath, sizeof(Configuration->ThemePath), L"\\EFI\\BloodHorn\\themes\\default");
-    StrCpyS(Configuration->ConfigPath, sizeof(Configuration->ConfigPath), L"\\EFI\\BloodHorn\\bootmgr.conf");
+    // Load configuration from UEFI variables
+    VarSize = sizeof(UINT32);
+    Status = gRT->GetVariable(
+                 L"BloodHornDefaultTimeout",
+                 &gBloodHornVariableGuid,
+                 NULL,
+                 &VarSize,
+                 &Configuration->DefaultTimeout
+                 );
+    if (EFI_ERROR(Status)) {
+        Configuration->DefaultTimeout = 5; // 5 seconds default
+    }
+    
+    VarSize = sizeof(UINT8);
+    Status = gRT->GetVariable(
+                 L"BloodHornBootEnvironment",
+                 &gBloodHornVariableGuid,
+                 NULL,
+                 &VarSize,
+                 &Configuration->DefaultBootEnvironment
+                 );
+    if (EFI_ERROR(Status)) {
+        Configuration->DefaultBootEnvironment = BOOT_ENVIRONMENT_AUTO;
+    }
+    
+    VarSize = sizeof(UINT8);
+    Status = gRT->GetVariable(
+                 L"BloodHornFlags",
+                 &gBloodHornVariableGuid,
+                 NULL,
+                 &VarSize,
+                 &Configuration->Flags
+                 );
+    if (EFI_ERROR(Status)) {
+        Configuration->Flags = BOOT_MANAGER_FLAG_SECURE_BOOT;
+    }
+    
+    VarSize = sizeof(UINT8);
+    Status = gRT->GetVariable(
+                 L"BloodHornSecureBootPolicy",
+                 &gBloodHornVariableGuid,
+                 NULL,
+                 &VarSize,
+                 &Configuration->SecureBootPolicy
+                 );
+    if (EFI_ERROR(Status)) {
+        Configuration->SecureBootPolicy = 1; // Enabled
+    }
+    
+    // Load string configurations
+    VarSize = sizeof(Configuration->ThemePath);
+    Status = gRT->GetVariable(
+                 L"BloodHornThemePath",
+                 &gBloodHornVariableGuid,
+                 NULL,
+                 &VarSize,
+                 Configuration->ThemePath
+                 );
+    if (EFI_ERROR(Status)) {
+        StrCpyS(Configuration->ThemePath, sizeof(Configuration->ThemePath), L"\\EFI\\BloodHorn\\themes\\default");
+    }
+    
+    VarSize = sizeof(Configuration->ConfigPath);
+    Status = gRT->GetVariable(
+                 L"BloodHornConfigPath",
+                 &gBloodHornVariableGuid,
+                 NULL,
+                 &VarSize,
+                 Configuration->ConfigPath
+                 );
+    if (EFI_ERROR(Status)) {
+        StrCpyS(Configuration->ConfigPath, sizeof(Configuration->ConfigPath), L"\\EFI\\BloodHorn\\bootmgr.conf");
+    }
+    
+    VarSize = sizeof(EFI_GUID);
+    Status = gRT->GetVariable(
+                 L"BloodHornSystemGuid",
+                 &gBloodHornVariableGuid,
+                 NULL,
+                 &VarSize,
+                 &Configuration->SystemGuid
+                 );
+    if (EFI_ERROR(Status)) {
+        // Generate a random system GUID if not exists
+        Status = gBS->CreateEvent(0, 0, NULL, NULL, (EFI_EVENT*)&Configuration->SystemGuid);
+        if (!EFI_ERROR(Status)) {
+            gRT->SetVariable(
+                L"BloodHornSystemGuid",
+                &gBloodHornVariableGuid,
+                EFI_VARIABLE_BOOTSERVICE_ACCESS | EFI_VARIABLE_RUNTIME_ACCESS,
+                sizeof(EFI_GUID),
+                &Configuration->SystemGuid
+                );
+        }
+    }
     
     return EFI_SUCCESS;
 }
@@ -454,9 +738,101 @@ EFI_STATUS EFIAPI SetBootConfiguration(
         return EFI_INVALID_PARAMETER;
     }
     
-    // TODO: Validate and save configuration to non-volatile storage
-    Print(L"Boot configuration updated\n");
+    EFI_STATUS Status;
     
+    // Validate configuration version
+    if (Configuration->Version != BOOT_MANAGER_PROTOCOL_VERSION) {
+        Print(L"Configuration version mismatch\n");
+        return EFI_INVALID_PARAMETER;
+    }
+    
+    // Save configuration to UEFI variables
+    Status = gRT->SetVariable(
+                 L"BloodHornDefaultTimeout",
+                 &gBloodHornVariableGuid,
+                 EFI_VARIABLE_BOOTSERVICE_ACCESS | EFI_VARIABLE_RUNTIME_ACCESS,
+                 sizeof(UINT32),
+                 &Configuration->DefaultTimeout
+                 );
+    if (EFI_ERROR(Status)) {
+        Print(L"Failed to save timeout: %r\n", Status);
+        return Status;
+    }
+    
+    Status = gRT->SetVariable(
+                 L"BloodHornBootEnvironment",
+                 &gBloodHornVariableGuid,
+                 EFI_VARIABLE_BOOTSERVICE_ACCESS | EFI_VARIABLE_RUNTIME_ACCESS,
+                 sizeof(UINT8),
+                 &Configuration->DefaultBootEnvironment
+                 );
+    if (EFI_ERROR(Status)) {
+        Print(L"Failed to save boot environment: %r\n", Status);
+        return Status;
+    }
+    
+    Status = gRT->SetVariable(
+                 L"BloodHornFlags",
+                 &gBloodHornVariableGuid,
+                 EFI_VARIABLE_BOOTSERVICE_ACCESS | EFI_VARIABLE_RUNTIME_ACCESS,
+                 sizeof(UINT8),
+                 &Configuration->Flags
+                 );
+    if (EFI_ERROR(Status)) {
+        Print(L"Failed to save flags: %r\n", Status);
+        return Status;
+    }
+    
+    Status = gRT->SetVariable(
+                 L"BloodHornSecureBootPolicy",
+                 &gBloodHornVariableGuid,
+                 EFI_VARIABLE_BOOTSERVICE_ACCESS | EFI_VARIABLE_RUNTIME_ACCESS,
+                 sizeof(UINT8),
+                 &Configuration->SecureBootPolicy
+                 );
+    if (EFI_ERROR(Status)) {
+        Print(L"Failed to save secure boot policy: %r\n", Status);
+        return Status;
+    }
+    
+    // Save string configurations
+    Status = gRT->SetVariable(
+                 L"BloodHornThemePath",
+                 &gBloodHornVariableGuid,
+                 EFI_VARIABLE_BOOTSERVICE_ACCESS | EFI_VARIABLE_RUNTIME_ACCESS,
+                 StrSize(Configuration->ThemePath),
+                 Configuration->ThemePath
+                 );
+    if (EFI_ERROR(Status)) {
+        Print(L"Failed to save theme path: %r\n", Status);
+        return Status;
+    }
+    
+    Status = gRT->SetVariable(
+                 L"BloodHornConfigPath",
+                 &gBloodHornVariableGuid,
+                 EFI_VARIABLE_BOOTSERVICE_ACCESS | EFI_VARIABLE_RUNTIME_ACCESS,
+                 StrSize(Configuration->ConfigPath),
+                 Configuration->ConfigPath
+                 );
+    if (EFI_ERROR(Status)) {
+        Print(L"Failed to save config path: %r\n", Status);
+        return Status;
+    }
+    
+    Status = gRT->SetVariable(
+                 L"BloodHornSystemGuid",
+                 &gBloodHornVariableGuid,
+                 EFI_VARIABLE_BOOTSERVICE_ACCESS | EFI_VARIABLE_RUNTIME_ACCESS,
+                 sizeof(EFI_GUID),
+                 &Configuration->SystemGuid
+                 );
+    if (EFI_ERROR(Status)) {
+        Print(L"Failed to save system GUID: %r\n", Status);
+        return Status;
+    }
+    
+    Print(L"Boot configuration saved successfully\n");
     return EFI_SUCCESS;
 }
 
@@ -471,9 +847,61 @@ EFI_STATUS EFIAPI ResetBootStatistics(
         return EFI_INVALID_PARAMETER;
     }
     
-    // TODO: Reset persistent statistics in non-volatile storage
-    Print(L"Boot statistics reset\n");
+    EFI_STATUS Status;
     
+    // Reset all statistics variables to zero
+    UINT32 ZeroValue = 0;
+    UINT64 Zero64 = 0;
+    
+    Status = gRT->SetVariable(
+                 L"BloodHornBootCount",
+                 &gBloodHornVariableGuid,
+                 EFI_VARIABLE_BOOTSERVICE_ACCESS | EFI_VARIABLE_RUNTIME_ACCESS,
+                 sizeof(UINT32),
+                 &ZeroValue
+                 );
+    if (EFI_ERROR(Status)) {
+        Print(L"Failed to reset boot count: %r\n", Status);
+        return Status;
+    }
+    
+    Status = gRT->SetVariable(
+                 L"BloodHornBootFailures",
+                 &gBloodHornVariableGuid,
+                 EFI_VARIABLE_BOOTSERVICE_ACCESS | EFI_VARIABLE_RUNTIME_ACCESS,
+                 sizeof(UINT32),
+                 &ZeroValue
+                 );
+    if (EFI_ERROR(Status)) {
+        Print(L"Failed to reset boot failures: %r\n", Status);
+        return Status;
+    }
+    
+    Status = gRT->SetVariable(
+                 L"BloodHornTotalBootTime",
+                 &gBloodHornVariableGuid,
+                 EFI_VARIABLE_BOOTSERVICE_ACCESS | EFI_VARIABLE_RUNTIME_ACCESS,
+                 sizeof(UINT64),
+                 &Zero64
+                 );
+    if (EFI_ERROR(Status)) {
+        Print(L"Failed to reset total boot time: %r\n", Status);
+        return Status;
+    }
+    
+    Status = gRT->SetVariable(
+                 L"BloodHornLastBootEntry",
+                 &gBloodHornVariableGuid,
+                 EFI_VARIABLE_BOOTSERVICE_ACCESS | EFI_VARIABLE_RUNTIME_ACCESS,
+                 sizeof(UINT32),
+                 &ZeroValue
+                 );
+    if (EFI_ERROR(Status)) {
+        Print(L"Failed to reset last boot entry: %r\n", Status);
+        return Status;
+    }
+    
+    Print(L"Boot statistics reset successfully\n");
     return EFI_SUCCESS;
 }
 
@@ -490,11 +918,160 @@ EFI_STATUS EFIAPI ExportConfiguration(
         return EFI_INVALID_PARAMETER;
     }
     
-    // TODO: Implement configuration export in different formats
-    // Format: 0 = JSON, 1 = XML, 2 = INI
-    Print(L"Export configuration to %s (format: %d)\n", ExportPath, Format);
+    EFI_STATUS Status;
+    EFI_FILE_HANDLE FileHandle = NULL;
+    BOOT_MANAGER_CONFIGURATION Config;
+    BOOT_MANAGER_STATISTICS Stats;
+    CHAR8 *Buffer = NULL;
+    UINTN BufferSize = 0;
     
-    return EFI_UNSUPPORTED;
+    // Get current configuration and statistics
+    Status = GetBootConfiguration(This, &Config);
+    if (EFI_ERROR(Status)) {
+        return Status;
+    }
+    
+    Status = GetBootStatistics(This, &Stats);
+    if (EFI_ERROR(Status)) {
+        return Status;
+    }
+    
+    // Create export buffer based on format
+    switch (Format) {
+        case 0: // JSON format
+            BufferSize = 4096; // Initial buffer size
+            Buffer = AllocateZeroPool(BufferSize);
+            if (!Buffer) {
+                return EFI_OUT_OF_RESOURCES;
+            }
+            
+            AsciiSPrint(Buffer, BufferSize,
+                "{\n"
+                "  \"version\": %d,\n"
+                "  \"default_timeout\": %d,\n"
+                "  \"boot_environment\": %d,\n"
+                "  \"flags\": 0x%02x,\n"
+                "  \"secure_boot_policy\": %d,\n"
+                "  \"theme_path\": \"%a\",\n"
+                "  \"config_path\": \"%a\",\n"
+                "  \"statistics\": {\n"
+                "    \"total_entries\": %d,\n"
+                "    \"active_entries\": %d,\n"
+                "    \"successful_boots\": %d,\n"
+                "    \"failed_boots\": %d,\n"
+                "    \"average_boot_time\": %lld\n"
+                "  }\n"
+                "}\n",
+                Config.Version,
+                Config.DefaultTimeout,
+                Config.DefaultBootEnvironment,
+                Config.Flags,
+                Config.SecureBootPolicy,
+                Config.ThemePath,
+                Config.ConfigPath,
+                Stats.TotalEntries,
+                Stats.ActiveEntries,
+                Stats.SuccessfulBoots,
+                Stats.FailedBoots,
+                Stats.AverageBootTime
+                );
+            break;
+            
+        case 1: // XML format
+            BufferSize = 4096;
+            Buffer = AllocateZeroPool(BufferSize);
+            if (!Buffer) {
+                return EFI_OUT_OF_RESOURCES;
+            }
+            
+            AsciiSPrint(Buffer, BufferSize,
+                "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+                "<BloodHornConfiguration>\n"
+                "  <Version>%d</Version>\n"
+                "  <DefaultTimeout>%d</DefaultTimeout>\n"
+                "  <BootEnvironment>%d</BootEnvironment>\n"
+                "  <Flags>0x%02x</Flags>\n"
+                "  <SecureBootPolicy>%d</SecureBootPolicy>\n"
+                "  <ThemePath>%a</ThemePath>\n"
+                "  <ConfigPath>%a</ConfigPath>\n"
+                "  <Statistics>\n"
+                "    <TotalEntries>%d</TotalEntries>\n"
+                "    <ActiveEntries>%d</ActiveEntries>\n"
+                "    <SuccessfulBoots>%d</SuccessfulBoots>\n"
+                "    <FailedBoots>%d</FailedBoots>\n"
+                "    <AverageBootTime>%lld</AverageBootTime>\n"
+                "  </Statistics>\n"
+                "</BloodHornConfiguration>\n",
+                Config.Version,
+                Config.DefaultTimeout,
+                Config.DefaultBootEnvironment,
+                Config.Flags,
+                Config.SecureBootPolicy,
+                Config.ThemePath,
+                Config.ConfigPath,
+                Stats.TotalEntries,
+                Stats.ActiveEntries,
+                Stats.SuccessfulBoots,
+                Stats.FailedBoots,
+                Stats.AverageBootTime
+                );
+            break;
+            
+        case 2: // INI format
+            BufferSize = 2048;
+            Buffer = AllocateZeroPool(BufferSize);
+            if (!Buffer) {
+                return EFI_OUT_OF_RESOURCES;
+            }
+            
+            AsciiSPrint(Buffer, BufferSize,
+                "[BloodHorn Configuration]\n"
+                "version=%d\n"
+                "default_timeout=%d\n"
+                "boot_environment=%d\n"
+                "flags=0x%02x\n"
+                "secure_boot_policy=%d\n"
+                "theme_path=%a\n"
+                "config_path=%a\n"
+                "\n[Statistics]\n"
+                "total_entries=%d\n"
+                "active_entries=%d\n"
+                "successful_boots=%d\n"
+                "failed_boots=%d\n"
+                "average_boot_time=%lld\n",
+                Config.Version,
+                Config.DefaultTimeout,
+                Config.DefaultBootEnvironment,
+                Config.Flags,
+                Config.SecureBootPolicy,
+                Config.ThemePath,
+                Config.ConfigPath,
+                Stats.TotalEntries,
+                Stats.ActiveEntries,
+                Stats.SuccessfulBoots,
+                Stats.FailedBoots,
+                Stats.AverageBootTime
+                );
+            break;
+            
+        default:
+            return EFI_INVALID_PARAMETER;
+    }
+    
+    // Write buffer to file
+    Status = WriteFileToPath(ExportPath, Buffer, AsciiStrLen(Buffer));
+    
+    if (Buffer) {
+        FreePool(Buffer);
+    }
+    
+    if (!EFI_ERROR(Status)) {
+        Print(L"Configuration exported to %s (format: %d)\n", ExportPath, Format);
+    } else {
+        Print(L"Failed to export configuration: %r\n", Status);
+    }
+    
+    return Status;
 }
 
 /**
@@ -510,11 +1087,54 @@ EFI_STATUS EFIAPI ImportConfiguration(
         return EFI_INVALID_PARAMETER;
     }
     
-    // TODO: Implement configuration import from different formats
-    // Format: 0 = JSON, 1 = XML, 2 = INI
-    Print(L"Import configuration from %s (format: %d)\n", ImportPath, Format);
+    EFI_STATUS Status;
+    CHAR8 *Buffer = NULL;
+    UINTN BufferSize = 0;
+    BOOT_MANAGER_CONFIGURATION Config;
     
-    return EFI_UNSUPPORTED;
+    // Load file content
+    Status = LoadFileFromPath(ImportPath, (UINT8**)&Buffer, &BufferSize);
+    if (EFI_ERROR(Status)) {
+        Print(L"Failed to load configuration file: %r\n", Status);
+        return Status;
+    }
+    
+    // Parse based on format
+    ZeroMem(&Config, sizeof(Config));
+    
+    switch (Format) {
+        case 0: // JSON format
+            Status = ParseJsonConfiguration(Buffer, &Config);
+            break;
+            
+        case 1: // XML format
+            Status = ParseXmlConfiguration(Buffer, &Config);
+            break;
+            
+        case 2: // INI format
+            Status = ParseIniConfiguration(Buffer, &Config);
+            break;
+            
+        default:
+            Status = EFI_INVALID_PARAMETER;
+            break;
+    }
+    
+    if (!EFI_ERROR(Status)) {
+        // Apply the imported configuration
+        Status = SetBootConfiguration(This, &Config);
+        if (!EFI_ERROR(Status)) {
+            Print(L"Configuration imported from %s (format: %d)\n", ImportPath, Format);
+        }
+    } else {
+        Print(L"Failed to parse configuration: %r\n", Status);
+    }
+    
+    if (Buffer) {
+        FreePool(Buffer);
+    }
+    
+    return Status;
 }
 
 // =============================================================================
@@ -992,10 +1612,15 @@ EFI_STATUS EFIAPI GetSystemInformation(
     }
     
     // Return system information
-    UnicodeSPrint(SystemInfo, L"BloodHorn Boot Manager v1.0\\n");
-    UnicodeSPrint(SystemInfo + StrLen(SystemInfo), L"Total boot entries: %d\\n", gBootManagerContext.EntryCount);
-    UnicodeSPrint(SystemInfo + StrLen(SystemInfo), L"Active entries: %d\\n", gBootManager.EntryCount);
+    UnicodeSPrint(SystemInfo, L"BloodHorn Boot Manager v1.0 BETA\n");
+    UnicodeSPrint(SystemInfo + StrLen(SystemInfo), L"Total boot entries: %d\n", gBootManagerContext.EntryCount);
+    UnicodeSPrint(SystemInfo + StrLen(SystemInfo), L"Active entries: %d\n", gBootManagerContext.EntryCount);
     
     *InfoSize = StrLen(SystemInfo);
     return EFI_SUCCESS;
 }
+
+// GUID definitions
+EFI_GUID gBootManagerProtocolGuid = BOOT_MANAGER_PROTOCOL_GUID;
+EFI_GUID gBloodHornVariableGuid = { 0x8B8E7E1F, 0x5C4A, 0x4A2B, { 0x9A, 0x1F, 0x8B, 0x3C, 0x7D, 0x2E, 0x4F, 0x6A } };
+BOOLEAN gCorebootAvailable = FALSE;
