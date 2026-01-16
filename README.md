@@ -8,6 +8,12 @@
 
 > **BloodHorn assumes familiarity with UEFI internals, PE loading, and modern boot attack surfaces. If those words don't ring bells, this project is not aimed at you.**
 
+---
+
+**Note from the maintainer**: I was recently diagnosed with sarcoma. Development may slow down as I focus on treatment and recovery. This project remains important to me, and I'll continue contributing as my health permits. Thank you for your understanding and support during this challenging time.
+
+---
+
 ## What makes BloodHorn different
 
 Unlike typical EDK2-based loaders that prioritize compatibility over correctness, BloodHorn treats firmware as hostile by design. We minimize DXE reliance, eliminate runtime services after ExitBootServices, and maintain a **< 64KB total binary footprint** while supporting 7 architectures.
