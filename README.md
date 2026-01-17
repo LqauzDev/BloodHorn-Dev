@@ -10,13 +10,17 @@
 
 ---
 
-**Note from the maintainer**: I was recently diagnosed with sarcoma. Development may slow down as I focus on treatment and recovery. This project remains important to me, and I'll continue contributing as my health permits. Thank you for your understanding and support during this challenging time.
+> **Note from the maintainer**: I was recently diagnosed with sarcoma. Development may slow down as I focus on treatment and recovery. This project remains important to me, and I'll continue contributing as my health permits. Thank you for your understanding and support during this challenging time.
+
+---
+
+**Current Status**: Version 7.80.0 represents a stable iteration of BloodHorn, but please understand that this is still actively developed software. While we've achieved significant stability, there are edge cases and scenarios where BloodHorn may encounter issues or break. The bootloader is designed for hostile environments, which means it operates at the boundaries of what's possible with UEFI firmware. Contributions, bug reports, and testing would be deeply appreciated from the back of my heart as we continue to improve and harden BloodHorn against real-world threats.
 
 ---
 
 ## What makes BloodHorn different
 
-Unlike typical EDK2-based loaders that prioritize compatibility over correctness, BloodHorn treats firmware as hostile by design. We minimize DXE reliance, eliminate runtime services after ExitBootServices, and maintain a **< 64KB total binary footprint** while supporting 7 architectures.
+Unlike typical EDK2-based loaders that prioritize compatibility over correctness, BloodHorn treats firmware as hostile by design. We minimize UEFI runtime services reliance, eliminate them after ExitBootServices, and maintain a compact binary footprint while supporting 7 architectures.
 
 **Inspired by**: Coreboot's minimalism, GRUB's extensibility, and TianoCore's UEFI compliance  
 **Contrasts with**: Traditional bootloaders that trust firmware implicitly  
