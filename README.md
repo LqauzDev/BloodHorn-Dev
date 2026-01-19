@@ -47,7 +47,7 @@ This isn't paranoia—it's the reality of modern threat landscapes.
 - **Memory zeroization** on every free
 
 ### Auditable codebase
-- **< 15K LOC** core bootloader
+- **100K+ LOC** including clib library
 - **No third-party blobs** in critical path
 - **Formal verification experiments** in progress
 - **Every line reviewed** for side-channel resistance
