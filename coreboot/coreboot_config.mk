@@ -53,22 +53,32 @@ TOOLCHAIN_DIR=/opt/coreboot-sdk
 
 # Compiler options
 CC=gcc
-CFLAGS=-O2 -pipe -Wall -Werror -march=native
+CFLAGS=-O2 -pipe -Wall -Werror -march=x86-64 -mtune=generic
 LDFLAGS=-Wl,--gc-sections -Wl,--strip-all
 
-# Coreboot make options
+# Coreboot make options (only set if not already defined by board config)
 COREBOOT_MAKE_OPTS=" \
     CPUS=$(nproc) \
     CONFIG_PAYLOAD_FILE=$(BUILD_DIR)/$(PAYLOAD_BINARY) \
     CONFIG_PAYLOAD_CMDLINE=\"$(PAYLOAD_CMDLINE)\" \
     CONFIG_CCACHE=$(ENABLE_CCACHE) \
-    CONFIG_TPM2=$(TPM_SUPPORT) \
-    CONFIG_SECURE_BOOT=$(SECURE_BOOT) \
-    CONFIG_MEASURED_BOOT=$(MEASURED_BOOT) \
-    CONFIG_VERIFIED_BOOT=$(VERIFIED_BOOT) \
-    CONFIG_USB=$(USB_SUPPORT) \
-    CONFIG_SATA=$(SATA_SUPPORT) \
-    CONFIG_NVME=$(NVME_SUPPORT) \
-    CONFIG_NETWORK=$(NETWORK_SUPPORT) \
-    CONFIG_PCI=$(PCI_SUPPORT) \
 "
+# Optional features - only add if coreboot version supports them
+ifeq ($(shell test -f $(COREBOOT_SOURCE_DIR)/src/security/tpm/tss/tcg-2.0/Makefile.inc && echo yes),yes)
+COREBOOT_MAKE_OPTS += "CONFIG_TPM2=$(TPM_SUPPORT)"
+endif
+ifeq ($(shell test -f $(COREBOOT_SOURCE_DIR)/src/security/verified_boot/Makefile.inc && echo yes),yes)
+COREBOOT_MAKE_OPTS += "CONFIG_VERIFIED_BOOT=$(VERIFIED_BOOT)"
+endif
+ifeq ($(shell test -f $(COREBOOT_SOURCE_DIR)/src/drivers/usb/Makefile.inc && echo yes),yes)
+COREBOOT_MAKE_OPTS += "CONFIG_USB=$(USB_SUPPORT)"
+endif
+ifeq ($(shell test -f $(COREBOOT_SOURCE_DIR)/src/drivers/sata/Makefile.inc && echo yes),yes)
+COREBOOT_MAKE_OPTS += "CONFIG_SATA=$(SATA_SUPPORT)"
+endif
+ifeq ($(shell test -f $(COREBOOT_SOURCE_DIR)/src/drivers/nvme/Makefile.inc && echo yes),yes)
+COREBOOT_MAKE_OPTS += "CONFIG_NVME=$(NVME_SUPPORT)"
+endif
+ifeq ($(shell test -f $(COREBOOT_SOURCE_DIR)/src/drivers/pci/Makefile.inc && echo yes),yes)
+COREBOOT_MAKE_OPTS += "CONFIG_PCI=$(PCI_SUPPORT)"
+endif
