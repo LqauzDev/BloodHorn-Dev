@@ -60,21 +60,25 @@
 // custom bootloader functionality including boot menu, security, and filesystem support.
 
 #include <Uefi.h>
-#include "compat.h"                    // Compatibility layer for different platforms
-#include <Library/UefiLib.h>           // Basic UEFI library functions
-#include <Library/UefiBootServicesTableLib.h>  // Boot services - essential for bootloader work
-#include <Library/UefiRuntimeServicesTableLib.h>  // Runtime services - for after boot services exit
-#include <Library/BaseMemoryLib.h>     // Memory operations (copy, zero, compare)
-#include <Library/MemoryAllocationLib.h> // Memory allocation - we need this a lot!
-#include <Protocol/LoadedImage.h>      // To get info about our loaded image
-#include <Protocol/GraphicsOutput.h>   // Graphics Output Protocol - for pretty UI
-#include <Protocol/SimpleFileSystem.h> // File system access - gotta read those kernels
-#include <Protocol/DevicePath.h>       // Device path handling - for finding boot devices
-#include <Protocol/Tcg2Protocol.h>     // TPM 2.0 protocol - security stuff
-#include <Library/DevicePathLib.h>    // Device path utilities
-#include <Library/BaseLib.h>           // Basic library functions (CPU pause, etc.)
-#include <Library/PrintLib.h>         // Formatted printing - for debug messages
-#include <Guid/FileInfo.h>             // File information GUID - for getting file stats
+#include "compat.h"
+#include <Library/UefiLib.h>
+#include <Library/UefiBootServicesTableLib.h>
+#include <Library/UefiRuntimeServicesTableLib.h>
+#include <Library/BaseMemoryLib.h>
+#include <Library/MemoryAllocationLib.h>
+#include <Library/TimerLib.h>
+#include <Library/PerformanceLib.h>
+#include "uefi/graphics.h"
+#include "boot/theme.h"
+#include "boot/localization.h"
+#include "boot/mouse.h"
+#include "boot/font.h"
+#include "config/config_ini.h"
+#include "config/config_json.h"
+#include "config/config_env.h"
+#include "boot/secure.h"
+#include "security/crypto.h"
+#include "coreboot/coreboot_main.h"
 
 // =============================================================================
 // BLOODHORN MODULES - Internal bootloader components
@@ -405,40 +409,46 @@ STATIC VOID trim_ascii(CHAR8* s) {
 }
 
 /**
- * Read an entire file as ASCII text
- * 
- * Reads a complete file into memory and ensures null-termination
- * for string operations. Ideal for reading configuration files.
- * 
- * @param root Root directory handle
- * @param path File path (UCS-2 string)
- * @param outBuf Output pointer for file contents
- * @param outLen Output pointer for file length
- * @return EFI_SUCCESS if successful, error code otherwise
+ * Load and verify kernel with enhanced security and performance tracking
  */
-STATIC EFI_STATUS ReadWholeFileAscii(EFI_FILE_HANDLE root, CONST CHAR16* path, CHAR8** outBuf, UINTN* outLen) {
-    EFI_STATUS Status;
-    EFI_FILE_HANDLE file = NULL;
-    *outBuf = NULL; *outLen = 0;
-    Status = root->Open(root, &file, (CHAR16*)path, EFI_FILE_MODE_READ, 0);
-    if (EFI_ERROR(Status)) return Status;
-    EFI_FILE_INFO* info = NULL; UINTN info_size = 0;
-    Status = file->GetInfo(file, &gEfiFileInfoGuid, &info_size, NULL);
-    if (Status == EFI_BUFFER_TOO_SMALL) {
-        info = AllocateZeroPool(info_size);
-        if (!info) { file->Close(file); return EFI_OUT_OF_RESOURCES; }
-        Status = file->GetInfo(file, &gEfiFileInfoGuid, &info_size, info);
+STATIC EFI_STATUS LoadAndVerifyKernelEnhanced(
+    IN CHAR16 *FileName,
+    OUT VOID **ImageBuffer,
+    OUT UINTN *ImageSize
+) {
+    if (!FileName || !ImageBuffer || !ImageSize) {
+        return EFI_INVALID_PARAMETER;
     }
-    if (EFI_ERROR(Status)) { if (info) FreePool(info); file->Close(file); return Status; }
-    UINTN size = (UINTN)info->FileSize;
-    CHAR8* buf = AllocateZeroPool(size + 1);  // +1 for null terminator
-    if (!buf) { FreePool(info); file->Close(file); return EFI_OUT_OF_RESOURCES; }
-    Status = file->Read(file, &size, buf);
-    file->Close(file);
-    FreePool(info);
-    if (EFI_ERROR(Status)) { FreePool(buf); return Status; }
-    buf[size] = 0;  // Ensure null termination
-    *outBuf = buf; *outLen = size;
+    
+    EFI_STATUS Status;
+    VOID *Buffer = NULL;
+    UINTN Size = 0;
+    
+    // Begin performance measurement
+    BeginPerformanceMeasurement(L"fileload");
+    
+    Status = ReadFile(FileName, &Buffer, &Size);
+    if (EFI_ERROR(Status)) {
+        EndPerformanceMeasurement(L"fileload");
+        return Status;
+    }
+    
+    // Verify kernel if secure boot is enabled
+    if (IsSecureBootEnabled()) {
+        BeginPerformanceMeasurement(L"verification");
+        
+        Status = VerifyImageSignature(Buffer, Size, NULL, 0);
+        EndPerformanceMeasurement(L"verification");
+        if (EFI_ERROR(Status)) {
+            FreePool(Buffer);
+            return Status;
+        }
+    }
+    
+    *ImageBuffer = Buffer;
+    *ImageSize = Size;
+    
+    EndPerformanceMeasurement(L"fileload");
     return EFI_SUCCESS;
 }
 
@@ -1798,12 +1808,30 @@ ExecuteKernelWithUefi (
     } else {
         // Calculate total memory from UEFI memory map
         UINT64 total_memory = 0;
-        for (UINTN i = 0; i < MapSize / DescSize; i++) {
-            EFI_MEMORY_DESCRIPTOR* Desc = (EFI_MEMORY_DESCRIPTOR*)((UINT8*)MemMap + i * DescSize);
-            if (Desc->Type == EfiConventionalMemory || Desc->Type == EfiLoaderCode ||
-                Desc->Type == EfiLoaderData || Desc->Type == EfiBootServicesCode ||
-                Desc->Type == EfiBootServicesData) {
-                total_memory += Desc->NumberOfPages * EFI_PAGE_SIZE;
+        if (MemMap && DescSize > 0) {
+            UINTN descriptor_count = MapSize / DescSize;
+            for (UINTN i = 0; i < descriptor_count; i++) {
+                EFI_MEMORY_DESCRIPTOR* Desc = (EFI_MEMORY_DESCRIPTOR*)((UINT8*)MemMap + i * DescSize);
+                // Validate descriptor bounds
+                if ((UINT8*)Desc + sizeof(EFI_MEMORY_DESCRIPTOR) > (UINT8*)MemMap + MapSize) {
+                    continue;
+                }
+                
+                // Only count usable memory types
+                if (Desc->Type == EfiConventionalMemory || 
+                    Desc->Type == EfiLoaderCode ||
+                    Desc->Type == EfiLoaderData || 
+                    Desc->Type == EfiBootServicesCode ||
+                    Desc->Type == EfiBootServicesData) {
+                    
+                    // Check for overflow in memory calculation
+                    if (Desc->NumberOfPages > (UINT64_MAX - total_memory) / EFI_PAGE_SIZE) {
+                        Print(L"Memory descriptor overflow detected\n");
+                        continue;
+                    }
+                    
+                    total_memory += Desc->NumberOfPages * EFI_PAGE_SIZE;
+                }
             }
         }
         boot_params->memory_size = total_memory;
@@ -1828,10 +1856,41 @@ ExecuteKernelWithUefi (
 
     // Jump to kernel entry point
     typedef VOID (*KernelEntry)(COREBOOT_BOOT_PARAMS*);
+    
+    // Validate kernel buffer before jumping
+    if (!KernelBuffer || KernelSize < 1024) {
+        Print(L"Invalid kernel buffer or size\n");
+        if (MemMap) FreePool(MemMap);
+        return EFI_INVALID_PARAMETER;
+    }
+    
+    // Check if kernel buffer is executable memory
+    BOOLEAN is_executable = FALSE;
+    if (MemMap && DescSize > 0) {
+        UINTN descriptor_count = MapSize / DescSize;
+        for (UINTN i = 0; i < descriptor_count; i++) {
+            EFI_MEMORY_DESCRIPTOR* Desc = (EFI_MEMORY_DESCRIPTOR*)((UINT8*)MemMap + i * DescSize);
+            if ((UINT8*)KernelBuffer >= Desc->PhysicalStart && 
+                (UINT8*)KernelBuffer < Desc->PhysicalStart + Desc->NumberOfPages * EFI_PAGE_SIZE) {
+                if (Desc->Type == EfiLoaderCode || Desc->Type == EfiRuntimeServicesCode) {
+                    is_executable = TRUE;
+                    break;
+                }
+            }
+        }
+    }
+    
+    if (!is_executable) {
+        Print(L"Warning: Kernel is not in executable memory region\n");
+    }
+    
     KernelEntry EntryPoint = (KernelEntry)KernelBuffer;
 
     Print(L"Jumping to kernel entry point at 0x%llx\n", (UINT64)(UINTN)KernelBuffer);
 
+    // Disable interrupts and prepare for kernel handover
+    DisableInterrupts();
+    
     // Execute kernel (this should not return)
     EntryPoint(boot_params);
 

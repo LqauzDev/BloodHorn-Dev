@@ -22,15 +22,42 @@ EFI_STATUS EFIAPI VerifyImageSignature(
     IN CONST UINT8   *PublicKey,
     IN UINTN         PublicKeySize
 ) {
-    // Assume the signature is appended to the image: [image][signature]
-    if (ImageSize < 256) return EFI_SECURITY_VIOLATION;
-    UINTN DataSize = ImageSize - 256;
+    if (!ImageBuffer || ImageSize == 0 || !PublicKey || PublicKeySize == 0) {
+        return EFI_INVALID_PARAMETER;
+    }
+    
+    // Validate signature size - don't assume 256 bytes
+    if (ImageSize < 64) return EFI_SECURITY_VIOLATION; // Minimum signature size
+    
+    // Try different signature formats
+    UINTN SignatureSize = 256; // Default to RSA-2048
+    if (PublicKeySize >= 512) {
+        // Check if it's RSA-4096
+        uint32_t key_bits = (PublicKey[0] << 24) | (PublicKey[1] << 16) | (PublicKey[2] << 8) | PublicKey[3];
+        if (key_bits >= 4096) {
+            SignatureSize = 512;
+        }
+    }
+    
+    if (ImageSize < SignatureSize) {
+        return EFI_SECURITY_VIOLATION;
+    }
+    
+    UINTN DataSize = ImageSize - SignatureSize;
     CONST UINT8* Data = (CONST UINT8*)ImageBuffer;
     CONST UINT8* Signature = Data + DataSize;
     UINT8 Hash[32];
-    if (!Sha256HashAll(Data, DataSize, Hash)) return EFI_SECURITY_VIOLATION;
-    if (!RsaPkcs1Verify(PublicKey, PublicKeySize, Hash, sizeof(Hash), Signature, 256))
+    
+    if (!Sha256HashAll(Data, DataSize, Hash)) {
         return EFI_SECURITY_VIOLATION;
+    }
+    
+    // Use our improved crypto verification
+    int crypto_result = verify_signature(Data, (uint32_t)DataSize, Signature, PublicKey);
+    if (crypto_result != CRYPTO_SUCCESS) {
+        return EFI_SECURITY_VIOLATION;
+    }
+    
     return EFI_SUCCESS;
 }
 
@@ -47,26 +74,39 @@ EFI_STATUS EFIAPI LoadAndVerifyKernel(
     OUT VOID    **ImageBuffer,
     OUT UINTN   *ImageSize
 ) {
+    if (!FileName || !ImageBuffer || !ImageSize) {
+        return EFI_INVALID_PARAMETER;
+    }
+    
     EFI_STATUS Status;
     VOID *Buffer = NULL;
     UINTN Size = 0;
+    
     Status = ReadFile(FileName, &Buffer, &Size);
     if (EFI_ERROR(Status)) return Status;
+    
     if (IsSecureBootEnabled()) {
         // Load public key from a secure variable
-        UINT8 PublicKey[256];
+        UINT8 PublicKey[512]; // Support up to RSA-4096
         UINTN PublicKeySize = sizeof(PublicKey);
         Status = gRT->GetVariable(L"PK", &gEfiGlobalVariableGuid, NULL, &PublicKeySize, PublicKey);
         if (EFI_ERROR(Status)) {
             FreePool(Buffer);
             return Status;
         }
+        
         Status = VerifyImageSignature(Buffer, Size, PublicKey, PublicKeySize);
         if (EFI_ERROR(Status)) {
             FreePool(Buffer);
+            // Zero out sensitive data
+            crypto_zeroize(PublicKey, sizeof(PublicKey));
             return Status;
         }
+        
+        // Zero out public key after use
+        crypto_zeroize(PublicKey, sizeof(PublicKey));
     }
+    
     *ImageBuffer = Buffer;
     *ImageSize = Size;
     return EFI_SUCCESS;

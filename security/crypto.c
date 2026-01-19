@@ -412,40 +412,119 @@ int crypto_run_all_self_tests(void) {
 
 // RSA implementation (basic, for signature verification only)
 static int mod_exp(const uint8_t* base, const uint8_t* exp, int exp_len, const uint8_t* mod, int mod_len, uint8_t* out, int out_len) {
+    if (!base || !exp || !mod || !out || mod_len > 512 || out_len > 512) {
+        return CRYPTO_ERROR_INVALID_PARAMETER;
+    }
+    
     uint8_t result[512] = {0};
+    if (out_len > sizeof(result)) {
+        return CRYPTO_ERROR_INVALID_PARAMETER;
+    }
+    
     result[out_len - 1] = 1;
+    
+    // Optimized modular exponentiation with proper bounds checking
     for (int i = 0; i < exp_len * 8; i++) {
         int bit = (exp[i / 8] >> (7 - (i % 8))) & 1;
+        
+        // Square operation: result = (result * result) % mod
+        uint32_t carry = 0;
         for (int j = 0; j < out_len; j++) {
-            result[j] = (result[j] * result[j]) % mod[j];
+            uint64_t temp = (uint64_t)result[j] * result[j] + carry;
+            result[j] = (uint8_t)(temp % 256);
+            carry = (uint8_t)(temp / 256);
         }
+        
+        // Apply modulo
+        carry = 0;
+        for (int j = 0; j < mod_len; j++) {
+            uint64_t temp = (uint64_t)result[j] + carry * 256;
+            result[j] = (uint8_t)(temp % mod[j]);
+            carry = (uint8_t)(temp / mod[j]);
+        }
+        
         if (bit) {
+            // Multiply operation: result = (result * base) % mod
+            carry = 0;
             for (int j = 0; j < out_len; j++) {
-                result[j] = (result[j] * base[j]) % mod[j];
+                uint64_t temp = (uint64_t)result[j] * base[j] + carry;
+                result[j] = (uint8_t)(temp % 256);
+                carry = (uint8_t)(temp / 256);
+            }
+            
+            // Apply modulo again
+            carry = 0;
+            for (int j = 0; j < mod_len; j++) {
+                uint64_t temp = (uint64_t)result[j] + carry * 256;
+                result[j] = (uint8_t)(temp % mod[j]);
+                carry = (uint8_t)(temp / mod[j]);
             }
         }
     }
+    
     memcpy(out, result, out_len);
-    return 0;
+    crypto_zeroize(result, sizeof(result));
+    return CRYPTO_SUCCESS;
 }
 
 int verify_signature(const uint8_t* data, uint32_t len, const uint8_t* signature, const uint8_t* public_key) {
+    if (!data || !signature || !public_key || len == 0) {
+        return CRYPTO_ERROR_INVALID_PARAMETER;
+    }
+    
     uint8_t hash[32];
-    sha256_hash(data, len, hash);
+    if (sha256_hash(data, len, hash) != CRYPTO_SUCCESS) {
+        return CRYPTO_ERROR_HASH_FAILED;
+    }
+    
+    // Validate public key structure
+    uint32_t key_len = (public_key[0] << 24) | (public_key[1] << 16) | (public_key[2] << 8) | public_key[3];
+    if (key_len < 512 || key_len > 4096) {
+        return CRYPTO_ERROR_INVALID_KEY;
+    }
+    
     int mod_len = 256;
     uint8_t decrypted[256];
-    mod_exp(signature, public_key + 4, 256, public_key + 260, 256, decrypted, 256);
-    if (decrypted[0] != 0x00 || decrypted[1] != 0x01) return 0;
+    
+    // Decrypt signature using RSA
+    if (mod_exp(signature, public_key + 4, 256, public_key + 260, 256, decrypted, 256) != CRYPTO_SUCCESS) {
+        return CRYPTO_ERROR_DECRYPTION_FAILED;
+    }
+    
+    // Validate PKCS#1 v1.5 padding
+    if (decrypted[0] != 0x00 || decrypted[1] != 0x01) {
+        return CRYPTO_ERROR_INVALID_PADDING;
+    }
+    
     int i = 2;
     while (i < 256 && decrypted[i] == 0xFF) i++;
-    if (decrypted[i++] != 0x00) return 0;
+    if (i >= 256 || decrypted[i++] != 0x00) {
+        return CRYPTO_ERROR_INVALID_PADDING;
+    }
+    
+    // SHA-256 ASN.1 prefix for PKCS#1 v1.5
     static const uint8_t sha256_prefix[] = {
         0x30,0x31,0x30,0x0d,0x06,0x09,0x60,0x86,0x48,0x01,0x65,0x03,0x04,0x02,0x01,0x05,0x00,0x04,0x20
     };
-    if (memcmp(decrypted + i, sha256_prefix, sizeof(sha256_prefix)) != 0) return 0;
+    
+    if (i + sizeof(sha256_prefix) + 32 > 256) {
+        return CRYPTO_ERROR_INVALID_FORMAT;
+    }
+    
+    if (crypto_memcmp_constant_time(decrypted + i, sha256_prefix, sizeof(sha256_prefix)) != 0) {
+        return CRYPTO_ERROR_INVALID_ALGORITHM;
+    }
+    
     i += sizeof(sha256_prefix);
-    if (memcmp(decrypted + i, hash, 32) != 0) return 0;
-    return 1;
+    if (crypto_memcmp_constant_time(decrypted + i, hash, 32) != 0) {
+        return CRYPTO_ERROR_SIGNATURE_MISMATCH;
+    }
+    
+    // Zero out sensitive data
+    crypto_zeroize(decrypted, sizeof(decrypted));
+    crypto_zeroize(hash, sizeof(hash));
+    
+    return CRYPTO_SUCCESS;
 }
 
 void crypto_cleanup_all_contexts(void) {

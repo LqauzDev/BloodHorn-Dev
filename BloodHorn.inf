@@ -18,6 +18,7 @@
   boot/menu.c
   boot/theme.c
   boot/mouse.c
+  boot/secure.c
   boot/Arch32/BloodChain/bloodchain.c
   boot/Arch32/aarch64.c
   boot/Arch32/chainload.c
@@ -30,24 +31,38 @@
   boot/Arch32/powerpc.c
   boot/Arch32/riscv64.c
   boot/Arch32/x86_64.c
-  fs/fat32.c
+  config/config_env.c
+  config/config_ini.c
+  config/config_json.c
+  config/config_validate.c
+  coreboot/coreboot_main.c
+  coreboot/coreboot_payload.c
+  coreboot/coreboot_platform.c
   fs/ext2.c
+  fs/fat32.c
+  fs/fs_common.c
+  fs/fs_mount.c
+  fs/iso9660.c
   net/arp.c
   net/dhcp.c
   net/net_utils.c
   net/pxe.c
   net/tftp.c
-  net/uefi_network.cpp
-  security/sha512.c
-  security/crypto.c
-  security/tpm2.c
   recovery/shell.c
   recovery/shell_cmds.c
-  config/config_ini.c
-  config/config_json.c
-  config/config_env.c
-  coreboot/coreboot_platform.c
-  coreboot/coreboot_payload.c
+  recovery/shell_fs.c
+  recovery/shell_history.c
+  recovery/shell_net.c
+  rust/bhshim_bootstrap.c
+  security/aes.c
+  security/crypto.c
+  security/entropy.c
+  security/hmac.c
+  security/secure_boot.c
+  security/sha512.c
+  security/tpm2.c
+  uefi/graphics.c
+  uefi/uefi.c
 
 [Sources.Common]
   net/network.hpp
