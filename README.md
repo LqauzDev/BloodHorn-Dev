@@ -358,6 +358,47 @@ Submit test results via GitHub Issues with:
 
 *Test matrix updated weekly*
 
+## Building BloodHorn
+
+### Quick Start
+
+```bash
+# Clone the repository
+git clone https://codeberg.org/PacHashs/BloodHorn.git
+cd BloodHorn
+
+# Build with EDK2 (automatically downloads dependencies)
+make x64
+
+# Or build all architectures
+make all
+
+# Install BloodHorn.efi
+make install
+```
+
+### Build Targets
+
+- `make x64` - Build for X64 (default)
+- `make ia32` - Build for IA32
+- `make aarch64` - Build for ARM64
+- `make riscv64` - Build for RISC-V 64-bit
+- `make loongarch64` - Build for LoongArch 64-bit
+- `make all` - Build all architectures
+- `make clean` - Clean build artifacts
+- `make install` - Install BloodHorn.efi
+
+### Build Variables
+
+- `EDK2_URL` - EDK2 repository URL
+- `EDK2_BRANCH` - EDK2 branch to use
+- `BUILD_DIR` - Build directory
+- `TOOLCHAIN` - EDK2 toolchain (GCC5, CLANG, etc.)
+
+The build system automatically downloads and sets up EDK2, then compiles BloodHorn using the official EDK2 build infrastructure.
+
+---
+
 ## Contributing
 
 We welcome contributions from security researchers, firmware engineers, and OS developers. See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
