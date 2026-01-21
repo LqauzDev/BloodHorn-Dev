@@ -136,29 +136,6 @@ See `LICENSE` for complete terms.
 
 ---
 
-## Quick Start
-
-**For experts only**: BloodHorn requires deep UEFI and firmware knowledge.
-
-### Prerequisites
-- EDK2 development environment
-- GCC cross-compiler for target architecture
-- Python 3.7+, NASM
-- **Understanding**: PE loading, UEFI internals, boot attack surfaces
-
-### Build
-```bash
-# Clone and setup
-git clone https://github.com/tianocore/edk2.git
-cd edk2 && git submodule update --init
-make -C BaseTools && . edksetup.sh
-
-# Build BloodHorn
-build -a X64 -p BloodHorn/BloodHorn.dsc -t GCC5
-```
-
-See [INSTALL.md](INSTALL.md) for detailed platform-specific instructions.
-
 ## Safety First
 
 BloodHorn operates at firmware level. Mistakes can render systems unbootable. Read SECURITY.md before use. Always back up existing bootloader.
@@ -193,7 +170,7 @@ BloodHorn undergoes rigorous testing across multiple environments:
 **Critical path coverage**: 97.3%  
 **Last updated**: January 2026
 
-See [TESTING.md](TESTING.md) for detailed test methodology and contribution guidelines.
+See the **Test Infrastructure** section below for detailed test methodology and contribution guidelines.
 
 ### Operating Systems
 
@@ -414,14 +391,6 @@ We welcome contributions from security researchers, firmware engineers, and OS d
 BloodHorn emerged from frustration with bootloader security practices in 2016. Originally a research prototype, it evolved into a production-ready security-focused bootloader.
 
 Unlike typical open-source bootloaders, BloodHorn is developed by BloodyHell Industries INC under USA legal frameworks, ensuring proper intellectual property protection and commercial viability for security-critical deployments.
-
-![First BloodHorn Screenshot (2016)](./2016screenshot.png)
-
-*From research prototype to production security tool*
-
-![BloodHorn Menu Screenshot](./bloodhorn.png)
-
-*Screenshot credit: [Lqauz](https://github.com/LqauzDev) - Thank you for capturing the current BloodHorn interface! (Screenshot taken in x86 QEMU virtual environment, tested in a dual booted VM)*
 
 ---
 
