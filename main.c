@@ -668,7 +668,15 @@ STATIC VOID ApplyUefiEnvOverrides(BOOT_CONFIG* config) {
  * @param config Output configuration structure
  * @return EFI_SUCCESS if successful, error code otherwise
  */
- */
+EFI_STATUS
+LoadBootConfig (
+  OUT BOOT_CONFIG* config
+  )
+{
+    if (!config) {
+        return EFI_INVALID_PARAMETER;
+    }
+
     // Defaults
     AsciiStrCpyS(config->default_entry, sizeof(config->default_entry), "linux");
     config->menu_timeout = 10;
@@ -680,37 +688,50 @@ STATIC VOID ApplyUefiEnvOverrides(BOOT_CONFIG* config) {
     config->header_font_size = 16;
     AsciiStrCpyS(config->language, sizeof(config->language), "en");
     config->enable_networking = FALSE;
-    config->kernel[0] = 0; config->initrd[0] = 0; config->cmdline[0] = 0;
+    config->kernel[0] = 0;
+    config->initrd[0] = 0;
+    config->cmdline[0] = 0;
 
     EFI_STATUS Status;
     EFI_FILE_HANDLE root_dir;
     Status = get_root_dir(&root_dir);
-    if (EFI_ERROR(Status)) {
+    if (!EFI_ERROR(Status)) {
+        // 1) INI: bloodhorn.ini
+        CHAR8* buf = NULL;
+        UINTN blen = 0;
+        Status = ReadWholeFileAscii(root_dir, L"bloodhorn.ini", &buf, &blen);
+        if (!EFI_ERROR(Status) && buf && blen > 0) {
+            ApplyIniToConfig(buf, config);
+        }
+        if (buf) {
+            FreePool(buf);
+            buf = NULL;
+            blen = 0;
+        }
+
+        // 2) JSON: bloodhorn.json
+        Status = ReadWholeFileAscii(root_dir, L"bloodhorn.json", &buf, &blen);
+        if (!EFI_ERROR(Status) && buf && blen > 0) {
+            ApplyJsonToConfig(buf, config);
+        }
+        if (buf) {
+            FreePool(buf);
+            buf = NULL;
+        }
+    } else {
         Print(L"Failed to open filesystem for config: %r\n", Status);
-        return EFI_SUCCESS; // keep defaults, do not fail boot
-    }
-
-    // 1) INI: bloodhorn.ini
-    CHAR8* buf = NULL; UINTN blen = 0;
-    Status = ReadWholeFileAscii(root_dir, L"bloodhorn.ini", &buf, &blen);
-    if (!EFI_ERROR(Status) && buf && blen > 0) {
-        ApplyIniToConfig(buf, config);
-        FreePool(buf); buf = NULL; blen = 0;
-    }
-
-    // 2) JSON: bloodhorn.json
-    Status = ReadWholeFileAscii(root_dir, L"bloodhorn.json", &buf, &blen);
-    if (!EFI_ERROR(Status) && buf && blen > 0) {
-        ApplyJsonToConfig(buf, config);
-        FreePool(buf); buf = NULL; blen = 0;
     }
 
     // 3) Environment variables (UEFI vars)
     ApplyUefiEnvOverrides(config);
 
     // Clamp values according to docs
-    if (config->menu_timeout < 0) config->menu_timeout = 0;
-    if (config->menu_timeout > 300) config->menu_timeout = 300;
+    if (config->menu_timeout < 0) {
+        config->menu_timeout = 0;
+    }
+    if (config->menu_timeout > 300) {
+        config->menu_timeout = 300;
+    }
 
     return EFI_SUCCESS;
 }
@@ -724,8 +745,9 @@ STATIC VOID ApplyUefiEnvOverrides(BOOT_CONFIG* config) {
  * 
  * @return EFI_SUCCESS if successful, error code otherwise
  */
-    EFI_STATUS Status;
-
+EFI_STATUS
+InitializeBloodHorn (VOID)
+{
     // Check for Coreboot firmware and initialize if present
     gCorebootAvailable = CorebootPlatformInit();
 
@@ -953,43 +975,51 @@ UefiMain (
         }
         
         if (!showMenu) {
-            // Auto-boot supported default entry
+            VOID* KernelBuffer = NULL;
+            UINTN KernelSize = 0;
+
             if (AsciiStrCmp(config.default_entry, "linux") == 0 && config.kernel[0] != 0) {
-                const char* k = config.kernel;
-                const char* i = (config.initrd[0] != 0) ? config.initrd : NULL;
-                const char* c = (config.cmdline[0] != 0) ? config.cmdline : "";
-                Status = linux_load_kernel(k, i, c);
+                const char* kernel_path = config.kernel;
+                const char* initrd_path = (config.initrd[0] != 0) ? config.initrd : NULL;
+                const char* cmdline = (config.cmdline[0] != 0) ? config.cmdline : "";
+
+                Status = linux_load_kernel(kernel_path, initrd_path, cmdline, &KernelBuffer, &KernelSize);
                 if (!EFI_ERROR(Status)) {
-                    Status = ExecuteKernel(KernelBuffer, KernelSize, NULL);
+                    Status = ExecuteKernelWithUefi(KernelBuffer, KernelSize, NULL);
                 }
-            } else {
-                // Fallback to boot menu if default entry not supported
+            }
+
+            if (EFI_ERROR(Status)) {
                 showMenu = TRUE;
             }
         }
     }
 
-    // Show boot menu if needed
-    Status = showMenu ? ShowBootMenu() : EFI_NOT_READY;
+    // Populate boot menu entries once before presenting the menu
+    if (showMenu) {
+        AddBootEntry(L"BloodChain Boot Protocol", BootBloodchainWrapper);
+        AddBootEntry(L"Linux Kernel", BootLinuxKernelWrapper);
+        AddBootEntry(L"Multiboot2 Kernel", BootMultiboot2KernelWrapper);
+        AddBootEntry(L"Limine Kernel", BootLimineKernelWrapper);
+        AddBootEntry(L"Chainload Bootloader", BootChainloadWrapper);
+        AddBootEntry(L"PXE Network Boot", BootPxeNetworkWrapper);
+        AddBootEntry(L"IA-32 (32-bit x86)", BootIa32Wrapper);
+        AddBootEntry(L"x86-64 (64-bit x86)", BootX86_64Wrapper);
+        AddBootEntry(L"ARM64 (aarch64)", BootAarch64Wrapper);
+        AddBootEntry(L"RISC-V 64", BootRiscv64Wrapper);
+        AddBootEntry(L"LoongArch 64", BootLoongarch64Wrapper);
+        AddBootEntry(L"Recovery Shell", BootRecoveryShellWrapper);
+        AddBootEntry(L"UEFI Shell", (EFI_STATUS (*)(void))BootUefiShellWrapper);
+        AddBootEntry(L"Exit to UEFI Firmware", ExitToFirmwareWrapper);
 
-    // Add boot entries using Boot Manager Protocol
-    AddBootEntry(L"BloodChain Boot Protocol", BootBloodchainWrapper);
-    AddBootEntry(L"Linux Kernel", BootLinuxKernelWrapper);
-    AddBootEntry(L"Multiboot2 Kernel", BootMultiboot2KernelWrapper);
-    AddBootEntry(L"Limine Kernel", BootLimineKernelWrapper);
-    AddBootEntry(L"Chainload Bootloader", BootChainloadWrapper);
-    AddBootEntry(L"PXE Network Boot", BootPxeNetworkWrapper);
-    AddBootEntry(L"IA-32 (32-bit x86)", BootIa32Wrapper);
-    AddBootEntry(L"x86-64 (64-bit x86)", BootX86_64Wrapper);
-    AddBootEntry(L"ARM64 (aarch64)", BootAarch64Wrapper);
-    AddBootEntry(L"RISC-V 64", BootRiscv64Wrapper);
-    AddBootEntry(L"LoongArch 64", BootLoongarch64Wrapper);
-    AddBootEntry(L"Recovery Shell", BootRecoveryShellWrapper);
-    AddBootEntry(L"UEFI Shell", (EFI_STATUS (*)(void))BootUefiShellWrapper);
-    AddBootEntry(L"Exit to UEFI Firmware", ExitToFirmwareWrapper);
+        Status = ShowBootMenu();
+    }
 
-    Status = showMenu ? ShowBootMenu() : EFI_NOT_READY;
-    if (Status == EFI_SUCCESS) {
+    if (showMenu && EFI_ERROR(Status)) {
+        Print(L"Boot menu failed: %r\n", Status);
+    }
+
+    if (!showMenu || Status == EFI_SUCCESS) {
         VOID* KernelBuffer = NULL;
         UINTN KernelSize = 0;
         Status = LoadAndVerifyKernel(L"kernel.efi", &KernelBuffer, &KernelSize);
@@ -1092,19 +1122,7 @@ EFI_STATUS EFIAPI BootPxeNetworkWrapper(VOID) {
  * Show boot menu using Boot Manager Protocol
  */
 STATIC EFI_STATUS ShowBootMenu(VOID) {
-    BOOT_MANAGER_ENTRY Entries[BOOT_MANAGER_MAX_ENTRIES];
-    UINTN EntryCount = 0;
-    EFI_STATUS Status;
-    
-    // Get boot entries from Boot Manager
-    Status = GetBootEntries(gBootManagerProtocol, Entries, &EntryCount);
-    if (EFI_ERROR(Status)) {
-        Print(L"Failed to get boot entries: %r\n", Status);
-        return Status;
-    }
-    
-    // Display boot menu using existing menu system
-    return ShowBootMenuWithEntries(Entries, EntryCount);
+    return ShowBootMenuWithEntries(NULL, 0);
 }
 
 EFI_STATUS EFIAPI BootRecoveryShellWrapper(VOID) {

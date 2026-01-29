@@ -6,90 +6,80 @@
   <em>Paranoid firmware bootloader for hostile environments</em>
 </p>
 
-> **BloodHorn assumes familiarity with UEFI internals, PE loading, and modern boot attack surfaces. If those words don't ring bells, this project is not aimed at you.**
+> **Heads-up from the maintainer**: BloodHorn is aimed at folks who already live in UEFI land—if PE loaders, TPMs, and attack surfaces sound unfamiliar, you may want a gentler project first.
 
 ---
 
-> **Note from the maintainer**: I was recently diagnosed with sarcoma. Development may slow down as I focus on treatment and recovery. This project remains important to me, and I'll continue contributing as my health permits. Thank you for your understanding and support during this challenging time.
+> **Personal note**: I'm balancing BloodHorn development with sarcoma treatment. Contributions, bug reports, and kind messages genuinely help keep the project on track while I focus on my health.
 
 ---
 
-**Current Status**: Version 7.80.0 represents a stable iteration of BloodHorn, but please understand that this is still actively developed software. While we've achieved significant stability, there are edge cases and scenarios where BloodHorn may encounter issues or break. The bootloader is designed for hostile environments, which means it operates at the boundaries of what's possible with UEFI firmware. Contributions, bug reports, and testing would be deeply appreciated from the back of my heart as we continue to improve and harden BloodHorn against real-world threats.
+### Where things stand
 
----
+- **Release train**: v7.80.0 is our current line. It’s good enough for hostile deployments, but still sees active churn. Expect sharp edges.
+- **Support window**: I patch regressions and security findings quickly; new features ship when energy allows.
+- **Help wanted**: Testing on weird hardware, crash dumps, and reproducible bug reports are the best way to move the needle right now.
 
-## What makes BloodHorn different
+## What makes BloodHorn BloodHorn
 
-Unlike typical EDK2-based loaders that prioritize compatibility over correctness, BloodHorn treats firmware as hostile by design. We minimize UEFI runtime services reliance, eliminate them after ExitBootServices, and maintain a compact binary footprint while supporting 7 architectures.
+BloodHorn treats firmware as an adversary instead of a trusted partner. That leads to a few practical rules:
 
-**Inspired by**: Coreboot's minimalism, GRUB's extensibility, and TianoCore's UEFI compliance  
-**Contrasts with**: Traditional bootloaders that trust firmware implicitly  
-**Avoids**: Dynamic allocation after boot, runtime services dependencies, and opaque binary blobs
+- Strip UEFI dependencies as soon as ExitBootServices succeeds.
+- Keep the binary small and auditable so you can reason about every code path.
+- Offer serious security features (TPM 2.0, secure boot, formal verification hooks) across seven architectures without dragging runtime baggage along for the ride.
 
-## Threat model
+**Built with** the spirit of Coreboot minimalism, GRUB flexibility, and TianoCore correctness.  
+**Avoids** dynamic allocation after boot, runtime service lock-in, and opaque blobs.
 
-BloodHorn operates under the assumption that:
+## Threat model at a glance
 
-- **Firmware is compromised**: All firmware services treated as potentially malicious
-- **Bootkits are present**: Defense-in-depth against sophisticated boot-time attacks
-- **Supply chain is hostile**: Cryptographic verification of every stage
-- **Hardware is untrusted**: TPM 2.0 as root of trust, not as convenience feature
+We assume:
 
-This isn't paranoia—it's the reality of modern threat landscapes.
+- Firmware may already be compromised.
+- Bootkits are lurking (measured boot and secure verification are table stakes).
+- Supply chains get messy; every stage gets cryptographically checked.
+- Hardware trust stops at the TPM boundary.
 
-## Design philosophy
+It's not paranoia—recent incident reports keep proving the point.
 
-### Security through minimalism
-- **Zero dynamic allocation** after ExitBootServices
-- **Single allocation phase** during initialization
-- **No libc** - bare-metal C only
-- **Constant-time crypto** operations
-- **Memory zeroization** on every free
+## Design notes from the maintainer desk
 
-### Auditable codebase
-- **100K+ LOC** including clib library
-- **No third-party blobs** in critical path
-- **Formal verification experiments** in progress
-- **Every line reviewed** for side-channel resistance
+### Security through restraint
+- One allocation phase before ExitBootServices, nothing after.
+- Bare-metal C, no libc crutches.
+- Constant-time crypto and aggressive zeroization.
 
-### Hostile firmware assumptions
-- **Custom PE loader** (doesn't trust firmware's)
-- **Own memory management** (bypasses firmware allocators)
-- **Direct hardware access** where possible
-- **Minimal UEFI variable usage**
+### Keep it readable
+- ~100k LOC including support libraries, written for auditing rather than cleverness.
+- No third-party mystery meat in the boot path.
+- Formal methods experiments are ongoing; patches welcome.
 
-## Non-goals
+### Assume the firmware lies
+- Custom PE loader (we don't trust the firmware's version).
+- Homegrown memory management rather than firmware allocators.
+- Direct hardware access and a lean variable footprint.
 
-BloodHorn intentionally avoids:
+## What we’re not doing
 
-- **Maximum compatibility** - we prioritize security over universal hardware support
-- **User-friendly GUI** - complexity is the enemy of security
-- **Plugin systems** - attack surface expansion
-- **Scripting support** - deterministic execution only
-- **Legacy BIOS optimization** - focus on modern UEFI security features
-- **Windows-first design** - security over market share
+Intentional omissions that keep the project sharp:
 
-These constraints signal maturity, not limitation.
+- Maximizing hardware compatibility at the expense of security posture.
+- Shipping a flashy GUI—the text UI stays on purpose.
+- Loading plugins or scripts that balloon the attack surface.
+- Catering to legacy BIOS setups or Windows-first expectations.
 
-## Current state
+If you need those features, there are other loaders that will treat you better.
 
-**Status**: Production-ready for security-critical deployments  
-**Maturity**: Stable core, experimental advanced features  
-**Audit status**: Partially audited (core stages)  
-**Formal verification**: In progress (memory management)  
-**Real-world usage**: Deployed in red team exercises and secure boot research
+## Current snapshot
 
-## Why this exists
+- **Deployment**: Trusted by red teams and firmware researchers who need hard-stop security guarantees.
+- **Maturity**: Core flows are stable; bleeding-edge features are opt-in.
+- **Audits**: Core stages audited, memory manager verification in progress.
+- **Reality check**: Expect occasional firmware-specific quirks—please report them.
 
-Most bootloaders prioritize compatibility over correctness. BloodHorn does the opposite.
+## Why we bother
 
-We're tired of:
-- Bootloaders that trust firmware implicitly
-- Security features bolted on as afterthoughts
-- "Secure boot" that's anything but
-- Complex attack surfaces in critical security components
-
-BloodHorn is our answer: a bootloader that assumes compromise from the start and builds security from first principles.
+Bootloaders that “just work” often do so by trusting firmware blindly. BloodHorn is the counter-argument: assume compromise, build defensively, and prove your work where possible.
 
 ## Visual evidence
 
@@ -104,24 +94,12 @@ BloodHorn is our answer: a bootloader that assumes compromise from the start and
 *Screenshot credit: [Lqauz](https://github.com/LqauzDev) - Thank you for capturing the current BloodHorn interface! (Screenshot taken in x86 QEMU virtual environment, tested in a dual booted VM)*
 
 ## Donate
-<button onclick="window.open('pay.oxapay.com/13185765', '_blank')" style="
-  background: #f12a02ff;
-  color: white;
-  border: none;
-  padding: 12px 24px;
-  border-radius: 8px;
-  cursor: pointer;
-  font-size: 16px;
-  font-weight: 600;
-  font-family: system-ui, -apple-system, sans-serif;
-  transition: background-color 0.2s;
-">
-   Donate with Crypto
-</button>
 
-<p style="margin-top: 15px; font-size: 14px; color: #666; line-height: 1.5;">
-  Support helps keep BloodHorn secure and actively developed. Contributions of code, testing, or crypto donations all help maintain the bootloader.
-</p>
+If you want to keep BloodHorn maintained (and help me keep the lights on during treatment), crypto tips go a long way:
+
+[Donate with crypto](https://pay.oxapay.com/13185765)
+
+Contributions of code, test reports, or documentation updates are equally welcome and often just as valuable.
 
 ## License
 
