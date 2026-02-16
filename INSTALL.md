@@ -114,3 +114,31 @@ verify_signatures=true
 - Test with manual TFTP download
 
 For detailed troubleshooting and advanced installation options, see the source code documentation.
+
+## Reproducible EDK2 Build (Current Recommended Flow)
+
+BloodHorn now validates project layout before any EDK2 invocation:
+
+```bash
+make preflight
+```
+
+Then build with either an online clone or an existing local EDK2 checkout.
+
+### Option A: online (default)
+
+```bash
+make x64
+```
+
+### Option B: offline/local EDK2 checkout
+
+```bash
+make x64 EDK2_DIR=/path/to/edk2
+```
+
+Use a fixed toolchain/build target for reproducibility:
+
+```bash
+make x64 EDK2_DIR=/path/to/edk2 TOOLCHAIN=GCC5 BUILD_TARGET=RELEASE
+```

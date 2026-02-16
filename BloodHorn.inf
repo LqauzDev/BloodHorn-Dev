@@ -1,12 +1,12 @@
 [Defines]
-  INF_VERSION            = 0x00010005
-  BASE_NAME              = BloodHorn
-  FILE_GUID              = BLOODHORN-500-BEEF-DEAD-BLOODBLO0001
-  MODULE_TYPE            = UEFI_APPLICATION
-  ENTRY_POINT            = UefiMain
-  VERSION_STRING         = 1.0
-  UEFI_SPECIFICATION_VERSION = 0x0002001E
-  PI_SPECIFICATION_VERSION  = 0x00010005
+  INF_VERSION                    = 0x00010005
+  BASE_NAME                      = BloodHorn
+  FILE_GUID                      = 9a8396e8-7c89-4b44-b5be-b100d8f0a101
+  MODULE_TYPE                    = UEFI_APPLICATION
+  ENTRY_POINT                    = UefiMain
+  VERSION_STRING                 = 1.0
+  UEFI_SPECIFICATION_VERSION     = 0x0002001E
+  PI_SPECIFICATION_VERSION       = 0x00010005
 
 [Sources]
   main.c
@@ -64,98 +64,29 @@
   uefi/graphics.c
   uefi/uefi.c
 
-[Sources.Common]
-  net/network.hpp
-  boot/libb/include/bloodhorn/bloodhorn.h
-  boot/libb/include/bloodhorn/graphics.h
-  boot/libb/include/bloodhorn/input.h
-  boot/libb/include/bloodhorn/filesystem.h
-  boot/libb/include/bloodhorn/uefi.h
-  coreboot/coreboot_platform.h
-  coreboot/coreboot_payload.h
-
 [Packages]
   MdePkg/MdePkg.dec
   MdeModulePkg/MdeModulePkg.dec
   NetworkPkg/NetworkPkg.dec
   CryptoPkg/CryptoPkg.dec
-  StdLib/StdLib.dec
+  SecurityPkg/SecurityPkg.dec
 
 [LibraryClasses]
-  UefiLib
-  UefiApplicationEntryPoint
-  UefiBootServicesTableLib
-  UefiRuntimeServicesTableLib
-  UefiRuntimeLib
-  MemoryAllocationLib
-  DebugLib
-  PrintLib
-  PcdLib
-  BaseLib
-  BaseMemoryLib
-  DebugPrintErrorLevelLib
-  PeCoffExtraActionLib
-  ReportStatusCodeLib
-  PerformanceLib
-  CacheMaintenanceLib
-  UefiDecompressLib
-  OrderedCollectionLib
-  SafeIntLib
-  SynchronizationLib
-  TimerLib
-  TpmMeasurementLib
-  Tpm2CommandLib
-  Tpm2DeviceLib
-  Tpm2DeviceLibTcg2
-  Tpm2DeviceLibRouter
-  DxeServicesLib
-  DxeServicesTableLib
-  UefiDriverEntryPoint
-  UefiScsiLib
-  UefiUsbLib
-  UefiHiiServicesLib
-  UefiHiiLib
-
-[LibraryClasses.common.UEFI_APPLICATION]
   UefiApplicationEntryPoint
   UefiLib
   UefiBootServicesTableLib
   UefiRuntimeServicesTableLib
   MemoryAllocationLib
+  BaseLib
+  BaseMemoryLib
   DebugLib
   PrintLib
   PcdLib
-  BaseLib
-  BaseMemoryLib
-  DebugPrintErrorLevelLib
-  PeCoffExtraActionLib
-  ReportStatusCodeLib
-  PerformanceLib
-  CacheMaintenanceLib
-  UefiDecompressLib
-  OrderedCollectionLib
-  SafeIntLib
-  SynchronizationLib
-  TimerLib
-  TpmMeasurementLib
-  Tpm2CommandLib
-  Tpm2DeviceLib
-  Tpm2DeviceLibTcg2
-  Tpm2DeviceLibRouter
-  DxeServicesLib
-  DxeServicesTableLib
-  UefiDriverEntryPoint
-  UefiScsiLib
-  UefiUsbLib
-  UefiHiiServicesLib
-  UefiHiiLib
 
 [BuildOptions]
-  MSFT:*_*_*_CC_FLAGS = /D UNICODE /I"$(WORKSPACE)/BloodHorn/boot/freetype/include" /D FT2_BUILD_LIBRARY /D FT_CONFIG_OPTION_SYSTEM_ZLIB=0 /D FT_CONFIG_OPTION_USE_ZLIB=0 /D FT_CONFIG_OPTION_USE_BZIP2=0 /D FT_CONFIG_OPTION_USE_PNG=0 /D FT_CONFIG_OPTION_USE_HARFBUZZER=0 /D FT_CONFIG_OPTION_MAC_FONTS=0 /D FT_CONFIG_OPTION_OLD_MAC_FONTS=0
-  GCC:*_*_*_CC_FLAGS = -DUNICODE -std=c++17 -I$(WORKSPACE)/BloodHorn/boot/freetype/include -DFT2_BUILD_LIBRARY -DFT_CONFIG_OPTION_SYSTEM_ZLIB=0 -DFT_CONFIG_OPTION_USE_ZLIB=0 -DFT_CONFIG_OPTION_USE_BZIP2=0 -DFT_CONFIG_OPTION_USE_PNG=0 -DFT_CONFIG_OPTION_USE_HARFBUZZER=0 -DFT_CONFIG_OPTION_MAC_FONTS=0 -DFT_CONFIG_OPTION_OLD_MAC_FONTS=0
-  XCODE:*_*_*_CC_FLAGS = -DUNICODE -std=c++17 -I"$(WORKSPACE)/BloodHorn/boot/freetype/include" /D FT2_BUILD_LIBRARY /D FT_CONFIG_OPTION_SYSTEM_ZLIB=0 /D FT_CONFIG_OPTION_USE_ZLIB=0 /D FT_CONFIG_OPTION_USE_BZIP2=0 /D FT_CONFIG_OPTION_USE_PNG=0 /D FT_CONFIG_OPTION_USE_HARFBUZZER=0 /D FT_CONFIG_OPTION_MAC_FONTS=0 /D FT_CONFIG_OPTION_OLD_MAC_FONTS=0
-  INTEL:*_*_*_CC_FLAGS = /D UNICODE /Qstd=c++17 /I"$(WORKSPACE)/BloodHorn/boot/freetype/include" /D FT2_BUILD_LIBRARY /D FT_CONFIG_OPTION_SYSTEM_ZLIB=0 /D FT_CONFIG_OPTION_USE_ZLIB=0 /D FT_CONFIG_OPTION_USE_BZIP2=0 /D FT_CONFIG_OPTION_USE_PNG=0 /D FT_CONFIG_OPTION_USE_HARFBUZZER=0 /D FT_CONFIG_OPTION_MAC_FONTS=0 /D FT_CONFIG_OPTION_OLD_MAC_FONTS=0
-  RVCT:*_*_*_CC_FLAGS = -DUNICODE --cpp11 -I"$(WORKSPACE)/BloodHorn/boot/freetype/include" /D FT2_BUILD_LIBRARY /D FT_CONFIG_OPTION_SYSTEM_ZLIB=0 /D FT_CONFIG_OPTION_USE_ZLIB=0 /D FT_CONFIG_OPTION_USE_BZIP2=0 /D FT_CONFIG_OPTION_USE_PNG=0 /D FT_CONFIG_OPTION_USE_HARFBUZZER=0 /D FT_CONFIG_OPTION_MAC_FONTS=0 /D FT_CONFIG_OPTION_OLD_MAC_FONTS=0
+  GCC:*_*_*_CC_FLAGS   = -DUNICODE -std=c11 -Wall -Wextra
+  CLANG:*_*_*_CC_FLAGS = -DUNICODE -std=c11 -Wall -Wextra
+  MSFT:*_*_*_CC_FLAGS  = /D UNICODE
 
 [BuildOptions.common.EDKII.UEFI_APPLICATION]
   *_*_*_CC_FLAGS = -D DISABLE_NEW_DEPRECATED_INTERFACES

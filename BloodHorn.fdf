@@ -49,7 +49,7 @@ READ_STATUS        = TRUE
 READ_LOCK_CAP      = TRUE
 READ_LOCK_STATUS   = TRUE
 
-  INF RuleOverride = SEC BloodHorn/BloodHorn.inf
+  INF RuleOverride = SEC BloodHorn.inf
 
 [FV.FVMAIN]
 BlockSize          = $(BLOCK_SIZE)
@@ -71,7 +71,7 @@ READ_LOCK_CAP      = TRUE
 READ_LOCK_STATUS   = TRUE
 
   # BloodHorn Boot Manager Application
-  INF RuleOverride = BINARY BloodHorn/BloodHorn.inf
+  INF RuleOverride = BINARY BloodHorn.inf
 
   # Essential UEFI Drivers
   INF MdeModulePkg/Universal/Console/ConPlatformDxe/ConPlatformDxe.inf
